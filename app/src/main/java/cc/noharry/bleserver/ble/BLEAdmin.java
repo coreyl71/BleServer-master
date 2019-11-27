@@ -256,7 +256,6 @@ public class BLEAdmin {
                 .build();
 
         // 31个字节
-//    String name = "123456789012345";
         String name = "Corey_MI5S_S";
 //    String name = "LIF_BLE";
 
@@ -500,6 +499,29 @@ public class BLEAdmin {
         sendMessage(characteristic, "收到:" + msg);
     }
 
+    /**
+     * 服务端给客户端发消息
+     * @param txBuffer
+     * @return
+     */
+    public boolean sendMessage(byte[] txBuffer) {
+
+        boolean result = false;
+
+        L.i("mCharacteristicWrite = " + mCharacteristicWrite);
+        L.i("currentDevice = " + currentDevice);
+
+        mCharacteristicWrite.setValue(txBuffer);
+        if (currentDevice != null && null != bluetoothGattServer) {
+            result = bluetoothGattServer.notifyCharacteristicChanged(currentDevice, mCharacteristicWrite, false);
+            L.i("Server 主动发送 hex:" + byte2HexStr(txBuffer) + " str:" + new String(txBuffer));
+        } else {
+            L.e("写失败");
+        }
+
+        return result;
+
+    }
 
     private void sendMessage(BluetoothGattCharacteristic characteristic, String message) {
         characteristic.setValue(message.getBytes());

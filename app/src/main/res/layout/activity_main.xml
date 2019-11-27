@@ -1,23 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-  xmlns:android="http://schemas.android.com/apk/res/android"
-  xmlns:app="http://schemas.android.com/apk/res-auto"
-  xmlns:tools="http://schemas.android.com/tools"
-  android:layout_width="match_parent"
-  android:layout_height="match_parent"
-  android:orientation="vertical"
-  tools:context="cc.noharry.bleserver.MainActivity">
-
-  <Button
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:id="@+id/bt_init"
-    android:text="init"
-    />
-  <TextView
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:id="@+id/tv_times"
-    />
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    tools:context="cc.noharry.bleserver.MainActivity">
+
+    <Button
+        android:id="@+id/bt_init"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="init" />
+
+    <TextView
+        android:id="@+id/tv_times"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
+
+    <Button
+        android:id="@+id/btn_send_msg"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="发送消息"/>
+
+    <EditText
+        android:id="@+id/et_msg_to_send"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="写入数据"/>
 
 </LinearLayout>

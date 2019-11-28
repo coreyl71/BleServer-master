@@ -1,5 +1,6 @@
 package cc.noharry.bleserver.ble;
 
+import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
@@ -21,12 +22,12 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.ParcelUuid;
 import android.support.annotation.RequiresApi;
-import android.util.Log;
 
-import cc.noharry.bleserver.L;
+import cc.noharry.bleserver.bean.MsgBean;
+import cc.noharry.bleserver.utils.L;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -53,9 +54,27 @@ public class BLEAdmin {
     private AdvertiseCallback mCallback;
     private BluetoothLeAdvertiser mBluetoothLeAdvertiser;
     private boolean isFirstRead = true;
+    private Activity activity;
 
+    /**
+     * 数据包发过来的时候
+     * 总包个数、即将发送的 msgId
+     */
+    private int totalCount;
+    private int startMsgId;
+
+//    private List<MsgBean> msgList;
+
+    private IMsgReceive msgReceiveListener = null;
 
     private BLEAdmin(Context context) {
+        this.activity = (Activity) context;
+        if (context instanceof IMsgReceive) {
+            msgReceiveListener = (IMsgReceive) context;
+        } else {
+            throw new IllegalArgumentException("activity must implements IMsgReceive");
+        }
+//        msgList = new ArrayList<>();
         mContext = context.getApplicationContext();
         mBluetoothManager = (BluetoothManager) mContext.getSystemService(Context.BLUETOOTH_SERVICE);
         if (null != mBluetoothManager) {
@@ -405,6 +424,64 @@ public class BLEAdmin {
         public void onCharacteristicWriteRequest(BluetoothDevice device, int requestId, BluetoothGattCharacteristic characteristic, boolean preparedWrite, boolean responseNeeded, int offset, byte[] requestBytes) {
             L.e(String.format("3.onCharacteristicWriteRequest：device name = %s, address = %s", device.getName(), device.getAddress()));
             L.i("3.收到数据 hex:" + byte2HexStr(requestBytes) + " str:" + new String(requestBytes) + " 长度:" + requestBytes.length);
+
+            // 用来判断 msgId 的缓存 byte 数组
+            byte[] tempByte = new byte[4];
+            System.arraycopy(requestBytes, 1, tempByte, 0, 4);
+
+            int msgId = byteArrayToInt(tempByte);
+            // TODO: 2019/11/28 根据 msgId 的定义规则做相应处理，暂时只打印
+            L.i("msgId = " + msgId);
+
+
+            if (msgId == 1) {
+
+                // 暂定为1代表发送首包，内含即将要发的数据包的个数
+                // 首包内代表数据包的个数的 byte 数组
+                byte[] totalCountByte = new byte[4];
+                System.arraycopy(requestBytes, 5, totalCountByte, 0, 4);
+                byte[] startMsgIdByte = new byte[4];
+                System.arraycopy(requestBytes, 9, startMsgIdByte, 0, 4);
+                // 计算总包个数
+                totalCount = byteArrayToInt(totalCountByte);
+                // 计算即将发包的起始 msgId
+                startMsgId = byteArrayToInt(startMsgIdByte);
+                L.i("start---totalCount = " + totalCount);
+                L.i("start---startMsgId = " + startMsgId);
+
+            } else {
+
+                // 内容字节数组
+                byte[] contentByte = new byte[14];
+                System.arraycopy(requestBytes, 5, contentByte, 0, 14);
+
+                MsgBean msgBean = new MsgBean();
+                msgBean.setHexStr(byte2HexStr(requestBytes));
+                msgBean.setMsgShowStr(new String(requestBytes));
+                msgBean.setMsgId(String.valueOf(msgId));
+                activity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        msgReceiveListener.onReceiveMsg(msgBean, contentByte);
+                    }
+                });
+
+                L.i("msgId = " + msgId);
+                L.i("startMsgId = " + startMsgId);
+                L.i("totalCount = " + totalCount);
+                if (msgId == (startMsgId + totalCount - 1)) {
+                    // 暂时只传四条：1000,1001,1002,1003
+                    activity.runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            msgReceiveListener.onReceiveMsgComplete();
+                        }
+                    });
+
+                }
+
+            }
+
             // 发送给client的响应
             bluetoothGattServer.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, characteristic.getValue());
             // 4.处理响应内容
@@ -482,6 +559,29 @@ public class BLEAdmin {
         }
     };
 
+
+    /**
+     * byte 数组转换成 int 整型
+     *
+     * @param b
+     * @return
+     */
+    public static int byteArrayToInt(byte[] b) {
+        byte[] a = new byte[4];
+        int i = a.length - 1, j = b.length - 1;
+        for (; i >= 0; i--, j--) {//从b的尾部(即int值的低位)开始copy数据
+            if (j >= 0)
+                a[i] = b[j];
+            else
+                a[i] = 0;//如果b.length不足4,则将高位补0
+        }
+        int v0 = (a[0] & 0xff) << 24;//&0xff将byte值无差异转成int,避免Java自动类型提升后,会保留高位的符号位
+        int v1 = (a[1] & 0xff) << 16;
+        int v2 = (a[2] & 0xff) << 8;
+        int v3 = (a[3] & 0xff);
+        return v0 + v1 + v2 + v3;
+    }
+
     /**
      * 4.处理响应内容
      *
@@ -501,6 +601,7 @@ public class BLEAdmin {
 
     /**
      * 服务端给客户端发消息
+     *
      * @param txBuffer
      * @return
      */

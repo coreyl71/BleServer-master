@@ -1,33 +1,80 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     tools:context="cc.noharry.bleserver.MainActivity">
 
-    <Button
-        android:id="@+id/bt_init"
+    <android.support.v4.widget.NestedScrollView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="init" />
+        android:layout_height="match_parent"
+        android:overScrollMode="never"
+        android:fillViewport="true">
 
-    <TextView
-        android:id="@+id/tv_times"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
 
-    <Button
-        android:id="@+id/btn_send_msg"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="发送消息"/>
+            <Button
+                android:id="@+id/bt_init"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="init" />
 
-    <EditText
-        android:id="@+id/et_msg_to_send"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="写入数据"/>
+            <TextView
+                android:id="@+id/tv_times"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
 
-</LinearLayout>
+            <Button
+                android:id="@+id/btn_send_msg"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="发送消息" />
+
+            <EditText
+                android:id="@+id/et_msg_to_send"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="写入数据" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:layout_marginStart="20dp"
+                android:text="最终拼接结果"
+                android:textSize="16sp"/>
+
+            <TextView
+                android:id="@+id/tv_final_msg_show"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:layout_marginStart="20dp"
+                android:layout_marginEnd="20dp"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:layout_marginStart="20dp"
+                android:text="分包数据"
+                android:textSize="16sp"/>
+
+            <android.support.v7.widget.RecyclerView
+                android:id="@+id/rcv_msg_show"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:nestedScrollingEnabled="false"
+                android:layout_marginTop="20dp"/>
+
+        </LinearLayout>
+
+
+
+    </android.support.v4.widget.NestedScrollView>
+
+</FrameLayout>

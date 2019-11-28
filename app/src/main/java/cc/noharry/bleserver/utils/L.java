@@ -18,7 +18,7 @@
  * @date 2015-10-10 下午1:57:59
  * @version V1.0
  */
-package cc.noharry.bleserver;
+package cc.noharry.bleserver.utils;
 
 import android.util.Log;
 

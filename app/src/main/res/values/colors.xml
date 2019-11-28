@@ -3,4 +3,137 @@
   <color name="colorPrimary">#3F51B5</color>
   <color name="colorPrimaryDark">#303F9F</color>
   <color name="colorAccent">#FF4081</color>
+
+  <color name="white">#FFFFFF</color>
+  <color name="black">#000000</color>
+  <color name="black_4">#0A000000</color>
+  <color name="black_8">#14000000</color>
+  <color name="black_10">#1A000000</color>
+  <color name="black_15">#26000000</color>
+  <color name="black_20">#33000000</color>
+  <color name="black_30">#4D000000</color>
+  <color name="black_50">#80000000</color>
+  <color name="white_4">#0AFFFFFF</color>
+  <color name="white_8">#14FFFFFF</color>
+  <color name="white_10">#1AFFFFFF</color>
+  <color name="white_16">#29FFFFFF</color>
+  <color name="white_20">#33FFFFFF</color>
+  <color name="white_30">#4DFFFFFF</color>
+  <color name="white_35">#59FFFFFF</color>
+  <color name="white_40">#66FFFFFF</color>
+  <color name="white_50">#80FFFFFF</color>
+  <color name="white_60">#99FFFFFF</color>
+  <color name="white_70">#B3FFFFFF</color>
+  <color name="white_80">#CCFFFFFF</color>
+  <color name="white_90">#E6FFFFFF</color>
+  <color name="transparent">#00FFFFFF</color>
+
+  <!--登录页面背景-->
+  <!--    <color name="color_bg_login">#5373E4</color>-->
+  <color name="color_bg_login">#444693</color>
+  <color name="color_str_launch_slogan">#434A4C</color>
+  <color name="color_bg_register_confirm_unable">#55444693</color>
+  <!--登录确认按钮-->
+  <color name="color_bg_login_confirm">#FFD400</color>
+  <color name="color_bg_login_confirm_unable">#55FFD400</color>
+
+  <!--注册页面去登录按钮-->
+  <color name="color_register_to_login">#000052</color>
+  <color name="color_register_to_login_30">#4D000052</color>
+  <color name="color_register_title">#444693</color>
+  <color name="color_register_title_below">#FFD400</color>
+  <color name="color_register_hint">#B9B7B8</color>
+  <color name="color_register_input">#000052</color>
+  <color name="color_register_divider">#CCCCCC</color>
+  <color name="color_register_divider_70">#B3CCCCCC</color>
+  <color name="color_register_divider_30">#4DCCCCCC</color>
+
+  <!--主页背景，灰色-->
+  <color name="bg_main_center">#F7F7F8</color>
+
+  <!--Tab 未选中的蓝色-->
+  <!--    <color name="bg_tab_normal_blue_30">#4D5373E4</color>-->
+  <!--    <color name="bg_tab_selected_blue">#5373E4</color>-->
+  <color name="bg_tab_normal_blue_30">#4D444693</color>
+  <color name="bg_tab_selected_blue">#444693</color>
+
+  <color name="color_tab_normal">#A7A7A9</color>
+  <color name="color_tab_selected">#444693</color>
+
+  <!--    <color name="bg_trade_buy_common_amount_item_selected">#F9BA49</color>-->
+  <!--    <color name="bg_trade_buy_common_amount_item_normal">#59F9BA49</color>-->
+  <color name="bg_trade_buy_common_amount_item_selected">#FFD400</color>
+  <color name="bg_trade_buy_common_amount_item_normal">#59FFD400</color>
+
+  <color name="bg_delivery_confirm">#FFD400</color>
+
+  <color name="color_commodity_detail_intro_listing_param">#35393E</color>
+  <color name="color_record_item_param">#636875</color>
+  <color name="color_record_item_param_70">#B3636875</color>
+  <color name="color_record_item_divider">#CCCCCC</color>
+  <color name="color_record_item_divider_70">#E3E3E3</color>
+  <color name="color_record_item_status_done">#36C2CF</color>
+  <color name="color_record_item_status_mention_money_in">#333333</color>
+  <color name="color_record_item_status_refused">#DB3F3E</color>
+  <color name="color_record_item_status_cancel">#FF3234</color>
+  <color name="color_record_item_status_part_done">#444693</color>
+  <color name="color_user_rate_available_notice">#D0021B</color>
+
+  <color name="color_commodity_detail_deal_title">#7C7B7B</color>
+  <color name="color_commodity_detail_deal_title_70">#B37C7B7B</color>
+  <color name="color_hint_search">#C2C5C7</color>
+  <color name="color_str_property_body_up">#6E6E6F</color>
+  <color name="color_str_property_body_symbol">#5A5A5A</color>
+  <color name="color_str_property_body_6d">#6D6D6D</color>
+  <color name="color_str_no_special_rate_data">#ADABAC</color>
+
+  <color name="color_bg_property_recharge_withdraw">#171D2A</color>
+  <color name="bg_select_item_sigle">#1C3354</color>
+  <color name="color_dialog_button">#007AFF</color>
+  <color name="color_bg_promotion_total">#617CE5</color>
+  <color name="color_promotion_total_notice">#ABBDED</color>
+
+  <color name="color_bg_dialog_gray">#F8F8F8</color>
+
+  <!-- QRCode scanner color begin -->
+  <color name="viewfinder_mask">#60000000</color>
+  <color name="result_view">#B0000000</color>
+  <color name="viewfinder_frame">#90FFFFFF</color>
+  <color name="result_point_color">#C0FFFF00</color>
+  <color name="laser_color">#0F0</color>
+  <color name="corner_color">#00FF00</color>
+  <!-- QRCode scanner color end -->
+
+  <!--Identity begin-->
+  <color name="bg_dark_entrance_2">#0D131E</color>
+  <color name="bg_dark_entrance_2_70">#B30D131E</color>
+  <color name="bg_dark_entrance_70">#B30E1624</color>
+  <color name="color_text_gray">#636875</color>
+  <color name="color_text_gray_35">#59636875</color>
+  <color name="color_text_green">#01D0B4</color>
+  <color name="color_text_green_35">#5901D0B4</color>
+  <color name="color_text_gray_recharge_withdraw_unable">#484F62</color>
+  <color name="color_text_gray_recharge_withdraw_unable_50">#80484F62</color>
+  <color name="text_forget_pwd">#395484</color>
+  <color name="color_dialog_item_text">#212121</color>
+  <!--Identity begin-->
+
+  <color name="bg_vip_detail">#F7F7F7</color>
+  <color name="color_divider_vip_detail">#E6E6E6</color>
+  <color name="color_vip_detail_email">#111111</color>
+  <color name="color_vip_detail_deadline">#727272</color>
+  <color name="color_vip_detail_record">#898989</color>
+  <color name="color_vip_detail_card_num">#895629</color>
+  <color name="color_vip_detail_card_symbol">#7C574B</color>
+  <color name="color_vip_detail_desc_gray">#9B9B9B</color>
+  <color name="color_vip_detail_desc_red">#F13333</color>
+  <color name="color_vip_detail_button_disable">#C1C1C1</color>
+  <color name="color_vip_buy_success_dark">#262626</color>
+  <color name="color_buy_special_order_title">#25292E</color>
+  <color name="color_buy_special_order_2">#979797</color>
+
+  <color name="color_delivery_address_show">#5B5E64</color>
+  <color name="color_delivery_address_list_edit">#444693</color>
+  <color name="color_delivery_address_list_delete">#E45378</color>
+  <color name="color_delivery_address_show_no_value">#ABABAB</color>
 </resources>

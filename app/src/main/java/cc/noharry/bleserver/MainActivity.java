@@ -2,7 +2,10 @@ package cc.noharry.bleserver;
 
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
@@ -10,16 +13,22 @@ import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import cc.noharry.bleserver.adapter.MsgShowAdapter;
+import cc.noharry.bleserver.bean.MsgBean;
 import cc.noharry.bleserver.ble.BLEAdmin;
+import cc.noharry.bleserver.ble.IMsgReceive;
 import cc.noharry.bleserver.ble.OnBTOpenStateListener;
+import cc.noharry.bleserver.utils.L;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class MainActivity extends AppCompatActivity implements OnClickListener {
+public class MainActivity extends AppCompatActivity implements OnClickListener, IMsgReceive {
 
     private OnBTOpenStateListener btOpenStateListener = null;
 
@@ -28,6 +37,24 @@ public class MainActivity extends AppCompatActivity implements OnClickListener {
     private Button btn_send_msg;
     // 发送消息输入框
     private EditText et_msg_to_send;
+    // 最终拼接消息显示
+    private TextView tv_final_msg_show;
+    // 消息接收显示列表
+    private RecyclerView rcv_msg_show;
+    // 布局管理器
+    private LinearLayoutManager llm;
+    // 列表适配器
+    private MsgShowAdapter msgShowAdapter;
+    /**
+     * 消息列表
+     */
+    private List<MsgBean> msgList;
+    /**
+     * 用来保存数据分包的集合
+     */
+    private List<byte[]> contentBytes;
+
+
     private UUID UUID_SERVER = UUID.fromString("0000ffe5-0000-1000-8000-00805f9b34fb");
     private TextView mTv_times;
     public AtomicInteger times = new AtomicInteger(0);
@@ -49,20 +76,72 @@ public class MainActivity extends AppCompatActivity implements OnClickListener {
 
         // 找控件
         initView();
+
         // 点击事件监听
-        initEvent();
+        setOnClickListener();
+
+        if (null != msgList) {
+            msgList.clear();
+        } else {
+            msgList = new ArrayList<>();
+        }
+        if (null == contentBytes) {
+            contentBytes = new ArrayList<>();
+        } else {
+            contentBytes.clear();
+        }
+
+
+        // 设置适配器
+        setAdapter();
 
     }
 
-    private void initEvent() {
-        mBtInit.setOnClickListener(this);
-        btn_send_msg.setOnClickListener(this);
+
+    /**
+     * 获取消息列表数据
+     */
+    @Override
+    public void onReceiveMsg(MsgBean msgBean, byte[] contentByte) {
+
+        this.msgList.add(msgBean);
+
+        if (null != msgList && msgList.size() != 0) {
+            setAdapter();
+        }
+
+        this.contentBytes.add(contentByte);
+
     }
 
-    private void initView() {
-        mBtInit = findViewById(R.id.bt_init);
-        btn_send_msg = findViewById(R.id.btn_send_msg);
-        et_msg_to_send = findViewById(R.id.et_msg_to_send);
+    /**
+     * 获取消息完成
+     */
+    @Override
+    public void onReceiveMsgComplete() {
+        L.i("onReceiveMsgComplete");
+        if (null != contentBytes && contentBytes.size() != 0) {
+            // 计算总字节长度
+            int contentByteLength = contentBytes.size() * 14;
+            // 待拼接数组，最终用来转换字符串显示
+            byte[] contentBytesConcat = new byte[contentByteLength];
+            for (int i = 0; i < contentBytes.size(); i++) {
+                System.arraycopy(contentBytes.get(i), 0, contentBytesConcat, i * 14, 14);
+            }
+            // 转成字符串
+            String finalStr = new String(contentBytesConcat);
+            // 显示
+            tv_final_msg_show.setText(finalStr);
+        }
+
+    }
+
+    /**
+     * 消息回滚、重发
+     */
+    @Override
+    public void onMsgResend() {
+
     }
 
     @Override
@@ -97,14 +176,15 @@ public class MainActivity extends AppCompatActivity implements OnClickListener {
 
     }
 
+    // 是否正在写入数据
     private boolean isWritingEntity;
     // 当前是否为自动写入模式
     private boolean isAutoWriteMode = false;
     // 最后一包是否自动补零
     private final boolean lastPackComplete = false;
+    // 单个数据包大小
     private int packLength = 20;
     private final Object lock = new Object();
-
     private HashSet<Integer> resIdSets = new HashSet<>();
 
     /**
@@ -195,5 +275,38 @@ public class MainActivity extends AppCompatActivity implements OnClickListener {
     private void initGatt() {
         BLEAdmin.getInstance(this).initGATTServer();
     }
+
+    /**
+     * 设置列表适配器
+     */
+    private void setAdapter() {
+
+        if (null == msgShowAdapter) {
+
+            msgShowAdapter = new MsgShowAdapter(MainActivity.this, msgList);
+            rcv_msg_show.setAdapter(msgShowAdapter);
+
+        } else {
+            // 刷新适配器
+            msgShowAdapter.update(msgList);
+        }
+
+    }
+
+    private void setOnClickListener() {
+        mBtInit.setOnClickListener(this);
+        btn_send_msg.setOnClickListener(this);
+    }
+
+    private void initView() {
+        mBtInit = findViewById(R.id.bt_init);
+        btn_send_msg = findViewById(R.id.btn_send_msg);
+        et_msg_to_send = findViewById(R.id.et_msg_to_send);
+        tv_final_msg_show = findViewById(R.id.tv_final_msg_show);
+        rcv_msg_show = findViewById(R.id.rcv_msg_show);
+        llm = new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false);
+        rcv_msg_show.setLayoutManager(llm);
+    }
+
 
 }

@@ -104,11 +104,11 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
     @Override
     public void onReceiveMsg(MsgBean msgBean, byte[] contentByte) {
 
-        this.msgList.add(msgBean);
-
-        if (null != msgList && msgList.size() != 0) {
-            setAdapter();
-        }
+//        this.msgList.add(msgBean);
+//
+//        if (null != msgList && msgList.size() != 0) {
+//            setAdapter();
+//        }
 
         this.contentBytes.add(contentByte);
 

@@ -21,12 +21,14 @@ import android.content.IntentFilter;
 import android.os.Build;
 import android.os.Handler;
 import android.os.ParcelUuid;
+import android.os.SystemClock;
 import android.support.annotation.RequiresApi;
 
 import cc.noharry.bleserver.bean.MsgBean;
 import cc.noharry.bleserver.utils.L;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 
@@ -75,6 +77,9 @@ public class BLEAdmin {
             throw new IllegalArgumentException("activity must implements IMsgReceive");
         }
 //        msgList = new ArrayList<>();
+        if (null == msgIdSet) {
+            msgIdSet = new HashSet<>();
+        }
         mContext = context.getApplicationContext();
         mBluetoothManager = (BluetoothManager) mContext.getSystemService(Context.BLUETOOTH_SERVICE);
         if (null != mBluetoothManager) {
@@ -362,6 +367,10 @@ public class BLEAdmin {
 
     }
 
+    // 接收消息的 ID 池，用来去重
+    private HashSet<Integer> msgIdSet;
+    // 获取开始和结束的时间
+    private long startTimeMillis, endTimeMillis;
 
     /**
      * 服务事件的回调
@@ -430,11 +439,19 @@ public class BLEAdmin {
             System.arraycopy(requestBytes, 1, tempByte, 0, 4);
 
             int msgId = byteArrayToInt(tempByte);
-            // TODO: 2019/11/28 根据 msgId 的定义规则做相应处理，暂时只打印
+            // 2019/11/28 根据 msgId 的定义规则做相应处理
             L.i("msgId = " + msgId);
+            if (msgIdSet.contains(msgId)) {
+                return;
+            }
+            // 加入 ID 池，方便下次判断
+            msgIdSet.add(msgId);
 
-
+            // 判断是首包还是内容包
             if (msgId == 1) {
+
+                // 获取开始时间
+                startTimeMillis = System.currentTimeMillis();
 
                 // 暂定为1代表发送首包，内含即将要发的数据包的个数
                 // 首包内代表数据包的个数的 byte 数组
@@ -466,11 +483,16 @@ public class BLEAdmin {
                     }
                 });
 
-                L.i("msgId = " + msgId);
+                L.i("contentMsgId = " + msgId);
                 L.i("startMsgId = " + startMsgId);
                 L.i("totalCount = " + totalCount);
                 if (msgId == (startMsgId + totalCount - 1)) {
                     // 暂时只传四条：1000,1001,1002,1003
+                    msgIdSet.clear();
+                    // 获取结束时间
+                    endTimeMillis = System.currentTimeMillis();
+                    L.i("startTimeMillis = " + startTimeMillis);
+                    L.i("endTimeMillis = " + endTimeMillis);
                     activity.runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
@@ -484,7 +506,8 @@ public class BLEAdmin {
 
             // 发送给client的响应
             bluetoothGattServer.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, characteristic.getValue());
-            // 4.处理响应内容
+            // 4.处理响应内容，通知客户端改变 Characteristic
+            // TODO: 2019/12/2 试着在这里改变返回值，将这里的 requestBytes 改为写自己的 byte[]
             onResponseToClient(requestBytes, device, requestId, characteristic);
         }
 

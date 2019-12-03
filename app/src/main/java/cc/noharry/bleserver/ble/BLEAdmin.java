@@ -486,13 +486,15 @@ public class BLEAdmin {
                 L.i("contentMsgId = " + msgId);
                 L.i("startMsgId = " + startMsgId);
                 L.i("totalCount = " + totalCount);
+                L.i("receiveCount = " + msgIdSet.size());
                 if (msgId == (startMsgId + totalCount - 1)) {
                     // 暂时只传四条：1000,1001,1002,1003
                     msgIdSet.clear();
                     // 获取结束时间
                     endTimeMillis = System.currentTimeMillis();
-                    L.i("startTimeMillis = " + startTimeMillis);
-                    L.i("endTimeMillis = " + endTimeMillis);
+                    L.i("complete---startTimeMillis = " + startTimeMillis);
+                    L.i("complete---endTimeMillis = " + endTimeMillis);
+                    L.i("complete---耗时 = " + (endTimeMillis - startTimeMillis) + "ms---" + (endTimeMillis - startTimeMillis) / 1000 + "s");
                     activity.runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
@@ -634,6 +636,8 @@ public class BLEAdmin {
 
         L.i("mCharacteristicWrite = " + mCharacteristicWrite);
         L.i("currentDevice = " + currentDevice);
+
+        mCharacteristicWrite.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
 
         mCharacteristicWrite.setValue(txBuffer);
         if (currentDevice != null && null != bluetoothGattServer) {

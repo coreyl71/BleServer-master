@@ -381,7 +381,7 @@ public class BLEAdmin {
          * 3、连接状态发生变化时
          * @param device
          * @param status
-         * @param newState
+         * @param newState 0 未连接；1 正在连接；2 已连接；3 正在取消连接
          */
         @Override
         public void onConnectionStateChange(BluetoothDevice device, int status, int newState) {

@@ -21,15 +21,12 @@ import android.content.IntentFilter;
 import android.os.Build;
 import android.os.Handler;
 import android.os.ParcelUuid;
-import android.os.SystemClock;
 import android.support.annotation.RequiresApi;
 
 import cc.noharry.bleserver.bean.MsgBean;
 import cc.noharry.bleserver.utils.L;
 
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.UUID;
 
 /**
@@ -135,9 +132,9 @@ public class BLEAdmin {
         return false;
     }
 
-    private OnBTOpenStateListener btOpenStateListener = null;
+    private IBTOpenStateChange btOpenStateListener = null;
 
-//    public interface OnBTOpenStateListener {
+//    public interface IBTOpenStateChange {
 //        void onBTOpen();
 //    }
 
@@ -147,7 +144,7 @@ public class BLEAdmin {
      * @param listener listen to the state of bluetooth adapter
      * @return true to indicate adapter startup has begun, or false on immediate error
      */
-    public boolean openBT(OnBTOpenStateListener listener) {
+    public boolean openBT(IBTOpenStateChange listener) {
 
         // 初始化蓝牙状态监听
         btOpenStateListener = listener;
@@ -200,6 +197,13 @@ public class BLEAdmin {
         } catch (Exception e) {
         } catch (Throwable e) {
         }
+
+    }
+
+    /**
+     * 用户拒绝连接，断开 BLE 设备的连接
+     */
+    public void closeConnection() {
 
     }
 
@@ -285,7 +289,7 @@ public class BLEAdmin {
 
         byte[] bytes = name.getBytes();
         L.i("name.length = " + bytes.length);
-        mBluetoothAdapter.setName(name);
+//        mBluetoothAdapter.setName(name);
 
         /**
          * Custom callback after Advertising succeeds or fails to start. Broadcasts the error code
@@ -465,6 +469,10 @@ public class BLEAdmin {
                 startMsgId = byteArrayToInt(startMsgIdByte);
                 L.i("start---totalCount = " + totalCount);
                 L.i("start---startMsgId = " + startMsgId);
+
+            } else if (msgId == 2) {
+                // 请求连接的消息
+                msgReceiveListener.onApplyConnection();
 
             } else {
 

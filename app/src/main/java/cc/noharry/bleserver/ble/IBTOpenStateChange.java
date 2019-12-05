@@ -1,5 +1,5 @@
 package cc.noharry.bleserver.ble;
 
-public interface OnBTOpenStateListener {
+public interface IBTOpenStateChange {
     void onBTOpen();
 }

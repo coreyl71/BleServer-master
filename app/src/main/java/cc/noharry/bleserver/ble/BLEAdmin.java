@@ -393,6 +393,8 @@ public class BLEAdmin {
             L.e(String.format("3、onConnectionStateChange：status = %s, newState =%s ", status, newState));
             super.onConnectionStateChange(device, status, newState);
             currentDevice = device;
+            // 根据条件判断是否是允许接入的设备，如果不允许，则主动断开与之的联系
+//            bluetoothGattServer.cancelConnection(device);
         }
 
         /**

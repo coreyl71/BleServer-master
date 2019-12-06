@@ -205,6 +205,9 @@ public class BLEAdmin {
      */
     public void closeConnection() {
 
+        // TODO: 2019/12/6  根据条件判断是否是允许接入的设备，如果不允许，则主动断开与之的联系
+        bluetoothGattServer.cancelConnection(currentDevice);
+
     }
 
 
@@ -289,7 +292,7 @@ public class BLEAdmin {
 
         byte[] bytes = name.getBytes();
         L.i("name.length = " + bytes.length);
-//        mBluetoothAdapter.setName(name);
+        mBluetoothAdapter.setName(name);
 
         /**
          * Custom callback after Advertising succeeds or fails to start. Broadcasts the error code
@@ -393,8 +396,13 @@ public class BLEAdmin {
             L.e(String.format("3、onConnectionStateChange：status = %s, newState =%s ", status, newState));
             super.onConnectionStateChange(device, status, newState);
             currentDevice = device;
+            if (newState == 2) {
+                L.i("已连接，弹框");
+                // TODO: 2019/12/6  已连接，之后要判断是否本地已存为安全数据
+                msgReceiveListener.onApplyConnection(device);
+            }
             // 根据条件判断是否是允许接入的设备，如果不允许，则主动断开与之的联系
-//            bluetoothGattServer.cancelConnection(device);
+//            bluetoothGattServer.cancelConnection(currentDevice);
         }
 
         /**
@@ -473,8 +481,9 @@ public class BLEAdmin {
                 L.i("start---startMsgId = " + startMsgId);
 
             } else if (msgId == 2) {
+                L.i("msgId = " + msgId);
                 // 请求连接的消息
-                msgReceiveListener.onApplyConnection();
+//                msgReceiveListener.onApplyConnection();
 
             } else {
 

@@ -1,8 +1,11 @@
 package cc.noharry.bleserver;
 
+import android.bluetooth.BluetoothDevice;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
+import android.text.TextUtils;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -24,6 +27,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
@@ -94,11 +98,11 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
 //        } else {
 //            msgList = new ArrayList<>();
 //        }
-//        if (null == contentBytes) {
-//            contentBytes = new ArrayList<>();
-//        } else {
-//            contentBytes.clear();
-//        }
+        if (null == contentBytes) {
+            contentBytes = new ArrayList<>();
+        } else {
+            contentBytes.clear();
+        }
 //
 //
 //        // 设置适配器
@@ -114,10 +118,31 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
      * 收到请求连接的消息
      */
     @Override
-    public void onApplyConnection() {
+    public void onApplyConnection(BluetoothDevice device) {
+
+        L.i("conn---deviceName = " + device.getName());
+        L.i("conn---deviceAddress = " + device.getAddress());
 
         // 显示用户确认连接 BLE 的弹框
-        ll_ble_connect_info.setVisibility(View.VISIBLE);
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                ll_ble_connect_info.setVisibility(View.VISIBLE);
+                if (!TextUtils.isEmpty(device.getName())) {
+                    tv_ble_device_name.setVisibility(View.VISIBLE);
+                    tv_ble_device_name.setText(device.getName());
+                } else {
+                    tv_ble_device_name.setVisibility(View.GONE);
+                }
+                if (!TextUtils.isEmpty(device.getAddress())) {
+                    tv_ble_device_address.setVisibility(View.VISIBLE);
+                    tv_ble_device_address.setText(device.getAddress());
+                } else {
+                    tv_ble_device_address.setVisibility(View.GONE);
+                }
+            }
+        });
+
 
     }
 
@@ -359,46 +384,50 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
 
     private boolean isLoading = false;
 
-    @Override
-    public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (keyCode == KeyEvent.KEYCODE_BACK) { // 监控/拦截/屏蔽返回键
-            // 短按按键1，弹框消失，确认连接
-            ll_ble_connect_info.setVisibility(View.GONE);
-
-        } else if (keyCode == KeyEvent.KEYCODE_MENU) {
-            // 短按按键2，弹框消失，拒绝连接
-            BLEAdmin.getInstance(this).closeConnection();
-
-        } else if (keyCode == KeyEvent.KEYCODE_HOME) {
-            //这里操作是没有返回结果的
-        }
-        return super.onKeyDown(keyCode, event);
-    }
-
-    //    @Override
-//    public boolean dispatchKeyEvent(KeyEvent event) {
-//        //public boolean onKeyDown(int keyCode, KeyEvent event) {
-//        int keyCode = event.getKeyCode();
-//        Log.e(ContantValue.TAG, "keyCode == " + keyCode);
-//        if (isLoading) {
-//            return true;
-//        }//正在初始化中，按键无效
-//
-//        KEY_ACTION_TYPE = getKeyActionType(keyCode, event);
-//        Log.e(ContantValue.TAG, "KEY_ACTION_TYPE == " + KEY_ACTION_TYPE);
-//        if (KEY_ACTION_TYPE == 1) {
-//
+//    @Override
+//    public boolean onKeyDown(int keyCode, KeyEvent event) {
+//        if (keyCode == KeyEvent.KEYCODE_BACK) { // 监控/拦截/屏蔽返回键
 //            // 短按按键1，弹框消失，确认连接
-////            mHandler.sendEmptyMessage(MessageConst.MESSAGE_ENTER_HEALTH_DATA);
-//        } else if (KEY_ACTION_TYPE == 3) {
+//            ll_ble_connect_info.setVisibility(View.GONE);
+//
+//        } else if (keyCode == KeyEvent.KEYCODE_MENU) {
 //            // 短按按键2，弹框消失，拒绝连接
+//            BLEAdmin.getInstance(this).closeConnection();
 //
+//        } else if (keyCode == KeyEvent.KEYCODE_HOME) {
+//            //这里操作是没有返回结果的
 //        }
-//
-//        //在main 界面不能相应长按返回的操作，所以这里返回true，不再去base 中跑
-//        //return super.dispatchKeyEvent(event);
-//        return true;
+//        return super.onKeyDown(keyCode, event);
 //    }
+
+        @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        //public boolean onKeyDown(int keyCode, KeyEvent event) {
+        int keyCode = event.getKeyCode();
+        Log.e(ContantValue.TAG, "keyCode == " + keyCode);
+        if (isLoading) {
+            return true;
+        }//正在初始化中，按键无效
+
+        KEY_ACTION_TYPE = getKeyActionType(keyCode, event);
+        Log.e(ContantValue.TAG, "KEY_ACTION_TYPE == " + KEY_ACTION_TYPE);
+        if (KEY_ACTION_TYPE == 1) {
+
+            // 短按按键1，弹框消失，确认连接，保存该设备到本地，下次可以自动连接不弹框
+            L.i("同意连接");
+            ll_ble_connect_info.setVisibility(View.GONE);
+//            mHandler.sendEmptyMessage(MessageConst.MESSAGE_ENTER_HEALTH_DATA);
+        } else if (KEY_ACTION_TYPE == 3) {
+            L.i("拒绝连接");
+            // 短按按键2，弹框消失，拒绝连接
+            ll_ble_connect_info.setVisibility(View.GONE);
+            BLEAdmin.getInstance(this).closeConnection();
+        }
+
+        //在main 界面不能相应长按返回的操作，所以这里返回true，不再去base 中跑
+        //return super.dispatchKeyEvent(event);
+        return true;
+    }
 
     int mKey1Action = KeyEvent.ACTION_UP;
     long mActionTime = 0;

@@ -400,7 +400,7 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
 //        return super.onKeyDown(keyCode, event);
 //    }
 
-        @Override
+    @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         //public boolean onKeyDown(int keyCode, KeyEvent event) {
         int keyCode = event.getKeyCode();
@@ -409,15 +409,30 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
             return true;
         }//正在初始化中，按键无效
 
+//        if (keyCode == ContantValue.USER_KEYCODE_1) {
+//
+//            // 短按按键1，弹框消失，确认连接，保存该设备到本地，下次可以自动连接不弹框
+//            L.i("同意连接");
+//            ll_ble_connect_info.setVisibility(View.GONE);
+//            BLEAdmin.getInstance(this).agreeConnection();
+////            mHandler.sendEmptyMessage(MessageConst.MESSAGE_ENTER_HEALTH_DATA);
+//        } else if (keyCode == ContantValue.USER_KEYCODE_2) {
+//            L.i("拒绝连接");
+//            // 短按按键2，弹框消失，拒绝连接
+//            ll_ble_connect_info.setVisibility(View.GONE);
+//            BLEAdmin.getInstance(this).closeConnection();
+//        }
+//        return true;
+
         KEY_ACTION_TYPE = getKeyActionType(keyCode, event);
         Log.e(ContantValue.TAG, "KEY_ACTION_TYPE == " + KEY_ACTION_TYPE);
-        if (KEY_ACTION_TYPE == 1) {
+        if (KEY_ACTION_TYPE == 3) {
 
             // 短按按键1，弹框消失，确认连接，保存该设备到本地，下次可以自动连接不弹框
             L.i("同意连接");
             ll_ble_connect_info.setVisibility(View.GONE);
 //            mHandler.sendEmptyMessage(MessageConst.MESSAGE_ENTER_HEALTH_DATA);
-        } else if (KEY_ACTION_TYPE == 3) {
+        } else if (KEY_ACTION_TYPE == 1) {
             L.i("拒绝连接");
             // 短按按键2，弹框消失，拒绝连接
             ll_ble_connect_info.setVisibility(View.GONE);
@@ -443,6 +458,7 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
     public int KEY_ACTION_TYPE = 0;
 
     boolean isKeyMessageSend = false;
+
     public int getKeyActionType(int keyCode, KeyEvent event) {
         int KEY_ACTION_TYPE = 0;
         int action = event.getAction();

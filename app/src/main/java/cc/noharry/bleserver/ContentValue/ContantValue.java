@@ -9,12 +9,10 @@ package cc.noharry.bleserver.ContentValue;
 public class ContantValue {
 
     public static final String TAG = "farinaZhang";
-//    public static final int USER_KEYCODE_1 = 231;   // 25 ; //  231;
-//    public static final int USER_KEYCODE_2 = 27;   // 24 ; //   27;
-    // 音量-，确认
-    public static final int USER_KEYCODE_1 = 25;
-    // 音量+，拒绝
-    public static final int USER_KEYCODE_2 = 24;
+    public static final int USER_KEYCODE_1 = 231;   // 25 ; //  231;
+    public static final int USER_KEYCODE_2 = 27;   // 24 ; //   27;
+    // 手机：25 音量+，确认；24 音量-，拒绝
+//    public static final int USER_KEYCODE_1 = 25, USER_KEYCODE_2 = 24;
 
     public static final String strDeviceType = "device_type";
     public static final String strDeviceState = "device_state";

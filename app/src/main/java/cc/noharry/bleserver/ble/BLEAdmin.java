@@ -10,6 +10,7 @@ import android.bluetooth.BluetoothGattServer;
 import android.bluetooth.BluetoothGattServerCallback;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
+import android.bluetooth.BluetoothProfile;
 import android.bluetooth.le.AdvertiseCallback;
 import android.bluetooth.le.AdvertiseData;
 import android.bluetooth.le.AdvertiseSettings;
@@ -205,9 +206,29 @@ public class BLEAdmin {
      */
     public void closeConnection() {
 
-        // TODO: 2019/12/6  根据条件判断是否是允许接入的设备，如果不允许，则主动断开与之的联系
-        bluetoothGattServer.cancelConnection(currentDevice);
+        // TODO: 2019/12/9  断开已建立的连接，或尝试取消当前正在进行的连接尝试。
+        L.i("connected = " + mBluetoothManager.getConnectionState(currentDevice, BluetoothProfile.GATT));
+        if (null != currentDevice) {
+            bluetoothGattServer.cancelConnection(currentDevice);
+        }
+//        currentDevice.setPairingConfirmation(false);
+//        int pwd = 0313;
+//        currentDevice.setPin(int2byte(pwd));
 
+    }
+
+    public static byte[] int2byte(int res) {
+        byte[] targets = new byte[4];
+
+        targets[3] = (byte) (res & 0xff);// 最低位
+        targets[2] = (byte) ((res >> 8) & 0xff);// 次低位
+        targets[1] = (byte) ((res >> 16) & 0xff);// 次高位
+        targets[0] = (byte) (res >>> 24);// 最高位,无符号右移。
+        return targets;
+    }
+
+    public void agreeConnection() {
+        currentDevice.setPairingConfirmation(true);
     }
 
 
@@ -287,7 +308,7 @@ public class BLEAdmin {
                 .build();
 
         // 31个字节
-        String name = "Corey_MI5S_S";
+        String name = "Corey_MI5S_S1";
 //    String name = "LIF_BLE";
 
         byte[] bytes = name.getBytes();
@@ -396,6 +417,11 @@ public class BLEAdmin {
             L.e(String.format("3、onConnectionStateChange：status = %s, newState =%s ", status, newState));
             super.onConnectionStateChange(device, status, newState);
             currentDevice = device;
+
+            // TODO: 2019/12/9 停止广播
+//            mBluetoothLeAdvertiser.stopAdvertising(mCallback);
+//            mCallback = null;
+
             if (newState == 2) {
                 L.i("已连接，弹框");
                 // TODO: 2019/12/6  已连接，之后要判断是否本地已存为安全数据

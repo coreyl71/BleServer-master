@@ -83,7 +83,7 @@
         android:layout_marginStart="50dp"
         android:layout_marginEnd="50dp"
         android:padding="20dp"
-        android:orientation="vertical"
+        android:orientation="horizontal"
         android:background="@color/white"
         android:visibility="gone">
 
@@ -92,6 +92,15 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textSize="14sp"
+            android:textColor="@color/black"
+            android:visibility="gone"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="同意"
+            android:textSize="14sp"
             android:textColor="@color/black"/>
 
         <TextView
@@ -99,6 +108,14 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
+            android:textSize="14sp"
+            android:textColor="@color/black"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="连接？"
             android:textSize="14sp"
             android:textColor="@color/black"/>
 

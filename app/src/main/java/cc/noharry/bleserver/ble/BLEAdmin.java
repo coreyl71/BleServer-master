@@ -55,6 +55,10 @@ public class BLEAdmin {
     private BluetoothLeAdvertiser mBluetoothLeAdvertiser;
     private boolean isFirstRead = true;
     private Activity activity;
+    /**
+     * 用户是否已授权，只有授权了才可以进行数据传输
+     */
+    private boolean isUserAuth;
 
     /**
      * 数据包发过来的时候
@@ -201,21 +205,6 @@ public class BLEAdmin {
 
     }
 
-    /**
-     * 用户拒绝连接，断开 BLE 设备的连接
-     */
-    public void closeConnection() {
-
-        // TODO: 2019/12/9  断开已建立的连接，或尝试取消当前正在进行的连接尝试。
-        L.i("connected = " + mBluetoothManager.getConnectionState(currentDevice, BluetoothProfile.GATT));
-        if (null != currentDevice) {
-            bluetoothGattServer.cancelConnection(currentDevice);
-        }
-//        currentDevice.setPairingConfirmation(false);
-//        int pwd = 0313;
-//        currentDevice.setPin(int2byte(pwd));
-
-    }
 
     public static byte[] int2byte(int res) {
         byte[] targets = new byte[4];
@@ -227,8 +216,28 @@ public class BLEAdmin {
         return targets;
     }
 
+
+    /**
+     * 用户已授权，可以进行数据传输
+     */
     public void agreeConnection() {
-        currentDevice.setPairingConfirmation(true);
+        isUserAuth = true;
+    }
+
+    /**
+     * 用户拒绝连接，断开 BLE 设备的连接
+     */
+    public void closeConnection() {
+
+        // TODO: 2019/12/9  断开已建立的连接，或尝试取消当前正在进行的连接尝试。
+        L.i("connected = " + mBluetoothManager.getConnectionState(currentDevice, BluetoothProfile.GATT));
+        if (null != currentDevice) {
+            bluetoothGattServer.cancelConnection(currentDevice);
+        }
+
+        // 重新开始广播
+        startAdvertiser();
+
     }
 
 
@@ -316,10 +325,21 @@ public class BLEAdmin {
         mBluetoothAdapter.setName(name);
 
         /**
-         * Custom callback after Advertising succeeds or fails to start. Broadcasts the error code
-         * in an Intent to be picked up by AdvertiserFragment and stops this Service.
-         * 广播成功或者失败的回调
+         * 获取广播对象
          */
+        mBluetoothLeAdvertiser = mBluetoothAdapter.getBluetoothLeAdvertiser();
+
+        // 开始广播
+        startAdvertiser();
+
+    }
+
+    /**
+     * 开始广播
+     */
+    private void startAdvertiser() {
+
+        // 广播成功或者失败的回调
         mCallback = new AdvertiseCallback() {
 
             @Override
@@ -335,9 +355,17 @@ public class BLEAdmin {
             }
         };
 
-        mBluetoothLeAdvertiser = mBluetoothAdapter.getBluetoothLeAdvertiser();
+        // 开启广播
         mBluetoothLeAdvertiser.startAdvertising(mSettings, mAdvertiseData, mScanResponseData, mCallback);
 
+    }
+
+    /**
+     * 停止广播
+     */
+    private void stopAdvertiser() {
+        mBluetoothLeAdvertiser.stopAdvertising(mCallback);
+        mCallback = null;
     }
 
     public void changeData() {
@@ -354,6 +382,11 @@ public class BLEAdmin {
     private BluetoothGattCharacteristic characteristicRead;
     private BluetoothDevice currentDevice;
 
+    /**
+     * 初始化 BluetoothGattServer 对象
+     *
+     * @param context 当前上下文
+     */
     private void initServices(Context context) {
 
         /**
@@ -417,18 +450,19 @@ public class BLEAdmin {
             L.e(String.format("3、onConnectionStateChange：status = %s, newState =%s ", status, newState));
             super.onConnectionStateChange(device, status, newState);
             currentDevice = device;
+            isUserAuth = false;
 
-            // TODO: 2019/12/9 停止广播
-//            mBluetoothLeAdvertiser.stopAdvertising(mCallback);
-//            mCallback = null;
+            // 停止广播
+            stopAdvertiser();
 
+            // 判断连接状态，0 为未连接，2 为已连接
             if (newState == 2) {
-                L.i("已连接，弹框");
-                // TODO: 2019/12/6  已连接，之后要判断是否本地已存为安全数据
-                msgReceiveListener.onApplyConnection(device);
+                L.i("已连接");
+            } else if (newState == 0) {
+                // 断开连接，重新开始广播
+                startAdvertiser();
             }
-            // 根据条件判断是否是允许接入的设备，如果不允许，则主动断开与之的联系
-//            bluetoothGattServer.cancelConnection(currentDevice);
+
         }
 
         /**
@@ -506,48 +540,14 @@ public class BLEAdmin {
                 L.i("start---totalCount = " + totalCount);
                 L.i("start---startMsgId = " + startMsgId);
 
-            } else if (msgId == 2) {
-                L.i("msgId = " + msgId);
-                // 请求连接的消息
-//                msgReceiveListener.onApplyConnection();
+            } else if (msgId < 2000) {
+
+                // 解析 TOKEN 校验数据包
+                parseTokenPackage(requestBytes, msgId);
 
             } else {
-
-                // 内容字节数组
-                byte[] contentByte = new byte[14];
-                System.arraycopy(requestBytes, 5, contentByte, 0, 14);
-
-                MsgBean msgBean = new MsgBean();
-                msgBean.setHexStr(byte2HexStr(requestBytes));
-                msgBean.setMsgShowStr(new String(requestBytes));
-                msgBean.setMsgId(String.valueOf(msgId));
-                activity.runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        msgReceiveListener.onReceiveMsg(msgBean, contentByte);
-                    }
-                });
-
-                L.i("contentMsgId = " + msgId);
-                L.i("startMsgId = " + startMsgId);
-                L.i("totalCount = " + totalCount);
-                L.i("receiveCount = " + msgIdSet.size());
-                if (msgId == (startMsgId + totalCount - 1)) {
-                    // 暂时只传四条：1000,1001,1002,1003
-                    msgIdSet.clear();
-                    // 获取结束时间
-                    endTimeMillis = System.currentTimeMillis();
-                    L.i("complete---startTimeMillis = " + startTimeMillis);
-                    L.i("complete---endTimeMillis = " + endTimeMillis);
-                    L.i("complete---耗时 = " + (endTimeMillis - startTimeMillis) + "ms---" + (endTimeMillis - startTimeMillis) / 1000 + "s");
-                    activity.runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            msgReceiveListener.onReceiveMsgComplete();
-                        }
-                    });
-
-                }
+                // 解析普通内容数据包
+                parseContentPackage(requestBytes, msgId);
 
             }
 
@@ -629,6 +629,107 @@ public class BLEAdmin {
         }
     };
 
+    /**
+     * 解析 Token 数据包的方法
+     *
+     * @param requestBytes
+     * @param msgId
+     */
+    private void parseTokenPackage(byte[] requestBytes, int msgId) {
+
+        // 内容字节数组
+        byte[] contentByte = new byte[14];
+        System.arraycopy(requestBytes, 5, contentByte, 0, 14);
+
+        MsgBean msgBean = new MsgBean();
+        msgBean.setHexStr(byte2HexStr(requestBytes));
+        msgBean.setMsgShowStr(new String(requestBytes));
+        msgBean.setMsgId(String.valueOf(msgId));
+        activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                msgReceiveListener.onReceiveMsg(msgBean, contentByte);
+            }
+        });
+
+        L.i("contentMsgId = " + msgId);
+        L.i("startMsgId = " + startMsgId);
+        L.i("totalCount = " + totalCount);
+        L.i("receiveCount = " + msgIdSet.size());
+        if (msgId == (startMsgId + totalCount - 1)) {
+            // 暂时只传四条：1000,1001,1002,1003
+            msgIdSet.clear();
+            // 获取结束时间
+            endTimeMillis = System.currentTimeMillis();
+            L.i("complete---startTimeMillis = " + startTimeMillis);
+            L.i("complete---endTimeMillis = " + endTimeMillis);
+            L.i("complete---耗时 = " + (endTimeMillis - startTimeMillis) + "ms---" + (endTimeMillis - startTimeMillis) / 1000 + "s");
+
+            // TODO: 2019/12/10  代表主设备发送 TOKEN 过来，等待校验
+            activity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    msgReceiveListener.onReceiveTokenComplete();
+                }
+            });
+
+        }
+
+    }
+
+    /**
+     * 解析普通内容数据包的方法
+     *
+     * @param requestBytes
+     * @param msgId
+     */
+    private void parseContentPackage(byte[] requestBytes, int msgId) {
+
+        // 如果用户未授权，则不用进行解析了，并且关闭连接
+        if (!isUserAuth) {
+            closeConnection();
+            return;
+        }
+
+        // 内容字节数组
+        byte[] contentByte = new byte[14];
+        System.arraycopy(requestBytes, 5, contentByte, 0, 14);
+
+        MsgBean msgBean = new MsgBean();
+        msgBean.setHexStr(byte2HexStr(requestBytes));
+        msgBean.setMsgShowStr(new String(requestBytes));
+        msgBean.setMsgId(String.valueOf(msgId));
+        activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                msgReceiveListener.onReceiveMsg(msgBean, contentByte);
+            }
+        });
+
+        L.i("contentMsgId = " + msgId);
+        L.i("startMsgId = " + startMsgId);
+        L.i("totalCount = " + totalCount);
+        L.i("receiveCount = " + msgIdSet.size());
+        if (msgId == (startMsgId + totalCount - 1)) {
+            // 暂时只传四条：1000,1001,1002,1003
+            msgIdSet.clear();
+            // 获取结束时间
+            endTimeMillis = System.currentTimeMillis();
+            L.i("complete---startTimeMillis = " + startTimeMillis);
+            L.i("complete---endTimeMillis = " + endTimeMillis);
+            L.i("complete---耗时 = " + (endTimeMillis - startTimeMillis) + "ms---" + (endTimeMillis - startTimeMillis) / 1000 + "s");
+
+            activity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    msgReceiveListener.onReceiveMsgComplete();
+                }
+            });
+
+        }
+
+    }
+
 
     /**
      * byte 数组转换成 int 整型
@@ -696,22 +797,18 @@ public class BLEAdmin {
 
     }
 
+    /**
+     * 服务端给客户端写回调
+     *
+     * @param characteristic
+     * @param message
+     */
     private void sendMessage(BluetoothGattCharacteristic characteristic, String message) {
         characteristic.setValue(message.getBytes());
         if (currentDevice != null) {
             bluetoothGattServer.notifyCharacteristicChanged(currentDevice, characteristic, false);
         }
         L.i("4.notify发送 hex:" + byte2HexStr(message.getBytes()) + " str:" + message);
-    }
-
-
-    private void sendMessage(BluetoothGattCharacteristic characteristic, byte[] message) {
-        characteristic.setValue(message);
-        if (currentDevice != null) {
-            bluetoothGattServer.notifyCharacteristicChanged(currentDevice, characteristic, false);
-        }
-
-        L.i("4.notify发送 hex:" + byte2HexStr(message) + " str:" + new String(message));
     }
 
     public String byte2HexStr(byte[] value) {

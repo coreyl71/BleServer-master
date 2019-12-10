@@ -8,6 +8,7 @@ import cc.noharry.bleserver.bean.MsgBean;
 
 public interface IMsgReceive {
     void onApplyConnection(BluetoothDevice device);
+    void onReceiveTokenComplete();
     void onReceiveMsg(MsgBean msgBean, byte[] contentByte);
     void onReceiveMsgComplete();
     void onMsgResend();

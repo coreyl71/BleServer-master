@@ -49,6 +49,8 @@ public class ContantValue {
     public static final int GET_SONSOR_RATE = 500; //传感器数据采集频率  20ms
 
 
+    public static final String SP_BLE_REMOTE_INFO = "remoteInfo";
+    public static final String SP_BLE_REMOTE_TOKEN = "remoteToken";
 
 
 }

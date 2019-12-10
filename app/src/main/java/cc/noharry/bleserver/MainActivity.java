@@ -1,6 +1,8 @@
 package cc.noharry.bleserver;
 
 import android.bluetooth.BluetoothDevice;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
@@ -21,6 +23,7 @@ import cc.noharry.bleserver.ble.IBTOpenStateChange;
 import cc.noharry.bleserver.ble.IMsgReceive;
 import cc.noharry.bleserver.utils.L;
 import cc.noharry.bleserver.utils.LogUtil;
+import cc.noharry.bleserver.utils.MySP;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -65,6 +68,13 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
     private LinearLayout ll_ble_connect_info;
     private TextView tv_ble_device_name, tv_ble_device_address;
 
+    // 本地保存的主设备 Token
+    private String remoteTokenSP;
+    // 接收到的主设备 Token
+    private String remoteTokenReceived;
+    // 是否需要用户授权，主要用于做按键拦截的判断
+    private boolean needUserAuth;
+
 
     private UUID UUID_SERVER = UUID.fromString("0000ffe5-0000-1000-8000-00805f9b34fb");
     private TextView mTv_times;
@@ -108,8 +118,22 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
 //        // 设置适配器
 //        setAdapter();
 
+        // 不需要用户授权
+        needUserAuth = false;
+        // 获取本地保存的主设备 Token
+        getRemoteDeviceToken();
+
         // 开启蓝牙
         openBT();
+
+    }
+
+    /**
+     * 获取本地保存的主设备TOKEN，用来做主设备连接时的判断，是否需要弹框
+     */
+    private void getRemoteDeviceToken() {
+
+        remoteTokenSP = MySP.getStringShare(this, ContantValue.SP_BLE_REMOTE_INFO, ContantValue.SP_BLE_REMOTE_TOKEN, "");
 
     }
 
@@ -146,6 +170,8 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
 
     }
 
+
+
     /**
      * 获取消息列表数据
      */
@@ -161,6 +187,64 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
         this.contentBytes.add(contentByte);
 
     }
+
+    /**
+     * 获取TOKEN完成
+     * 与本地 TOKEN 比对，一致则同意连接，否则弹框需用户同意
+     */
+    @Override
+    public void onReceiveTokenComplete() {
+
+        L.i("onReceiveTokenComplete");
+        if (null != contentBytes && contentBytes.size() != 0) {
+
+            // 计算总字节长度
+            int contentByteLength = contentBytes.size() * 14;
+            // 待拼接数组，最终用来转换字符串显示
+            byte[] contentBytesConcat = new byte[contentByteLength];
+            for (int i = 0; i < contentBytes.size(); i++) {
+                System.arraycopy(contentBytes.get(i), 0, contentBytesConcat, i * 14, 14);
+            }
+            // 转成字符串
+            remoteTokenReceived = new String(contentBytesConcat);
+
+            // 将收到的主设备 Token 和本地的对比，如果不一致则需要用户授权
+            if (!TextUtils.isEmpty(remoteTokenReceived) && !TextUtils.isEmpty(remoteTokenSP)) {
+
+                if (!TextUtils.equals(remoteTokenReceived, remoteTokenSP)) {
+
+                    // 需要用户授权
+                    needUserAuth = true;
+                    // TODO: 2019/12/10 弹框需要用户授权，同意连接才刷新本地 SP
+                    ll_ble_connect_info.setVisibility(View.VISIBLE);
+                    tv_ble_device_address.setVisibility(View.GONE);
+
+//                    if (!TextUtils.isEmpty(remoteTokenStr)) {
+//                        tv_ble_device_address.setVisibility(View.VISIBLE);
+//                        tv_ble_device_address.setText(remoteTokenStr);
+//                    } else {
+//                        tv_ble_device_address.setVisibility(View.GONE);
+//                    }
+
+                    // 刷新 SP 中存储的主设备 Token
+                    updateRemoteTokenSP(remoteTokenReceived);
+
+                } else {
+
+                    // 不需要用户授权，直接连接
+                    needUserAuth = false;
+                    // TODO: 2019/12/10 弹框需要用户授权，同意连接才刷新本地 SP
+                    ll_ble_connect_info.setVisibility(View.GONE);
+
+                }
+
+            }
+
+        }
+
+    }
+
+
 
     /**
      * 获取消息完成
@@ -402,46 +486,66 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        //public boolean onKeyDown(int keyCode, KeyEvent event) {
+
         int keyCode = event.getKeyCode();
         Log.e(ContantValue.TAG, "keyCode == " + keyCode);
+
+        // 正在初始化中，按键无效
         if (isLoading) {
             return true;
-        }//正在初始化中，按键无效
+        }
 
-//        if (keyCode == ContantValue.USER_KEYCODE_1) {
-//
-//            // 短按按键1，弹框消失，确认连接，保存该设备到本地，下次可以自动连接不弹框
-//            L.i("同意连接");
-//            ll_ble_connect_info.setVisibility(View.GONE);
-//            BLEAdmin.getInstance(this).agreeConnection();
-////            mHandler.sendEmptyMessage(MessageConst.MESSAGE_ENTER_HEALTH_DATA);
-//        } else if (keyCode == ContantValue.USER_KEYCODE_2) {
-//            L.i("拒绝连接");
-//            // 短按按键2，弹框消失，拒绝连接
-//            ll_ble_connect_info.setVisibility(View.GONE);
-//            BLEAdmin.getInstance(this).closeConnection();
-//        }
-//        return true;
-
+        // 获取具体的按键类型
         KEY_ACTION_TYPE = getKeyActionType(keyCode, event);
         Log.e(ContantValue.TAG, "KEY_ACTION_TYPE == " + KEY_ACTION_TYPE);
         if (KEY_ACTION_TYPE == 3) {
 
-            // 短按按键1，弹框消失，确认连接，保存该设备到本地，下次可以自动连接不弹框
+            // 短按按键 1，弹框消失，确认连接，保存该设备到本地，下次可以自动连接不弹框
             L.i("同意连接");
             ll_ble_connect_info.setVisibility(View.GONE);
-//            mHandler.sendEmptyMessage(MessageConst.MESSAGE_ENTER_HEALTH_DATA);
+            // TODO: 2019/12/10 这里需要给一个状态值，用来做 Server 是否继续接收消息的判断
+            BLEAdmin.getInstance(this).agreeConnection();
+            // 刷新本地存储的主设备 Token
+            updateRemoteTokenSP(remoteTokenReceived);
+
         } else if (KEY_ACTION_TYPE == 1) {
+
             L.i("拒绝连接");
-            // 短按按键2，弹框消失，拒绝连接
+            // 短按按键 2，弹框消失，拒绝连接
             ll_ble_connect_info.setVisibility(View.GONE);
             BLEAdmin.getInstance(this).closeConnection();
+
         }
 
         //在main 界面不能相应长按返回的操作，所以这里返回true，不再去base 中跑
         //return super.dispatchKeyEvent(event);
         return true;
+
+    }
+
+    /**
+     * 刷新 SP 中存储的主设备 Token
+     * @param remoteTokenStr    待存入的主设备 Token
+     */
+    private void updateRemoteTokenSP(String remoteTokenStr) {
+
+        // 保存设置语言的类型到 SP
+        SharedPreferences sharedPreferences = getSharedPreferences(ContantValue.SP_BLE_REMOTE_INFO, Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putString(ContantValue.SP_BLE_REMOTE_TOKEN, remoteTokenStr);
+        // 确保存储成功
+        saveRemoteToken(editor);
+
+    }
+
+    /**
+     * 确保存储主设备 Token 成功
+     * @param editor
+     */
+    private void saveRemoteToken(SharedPreferences.Editor editor) {
+        if (!editor.commit()) {
+            saveRemoteToken(editor);
+        }
     }
 
     int mKey1Action = KeyEvent.ACTION_UP;

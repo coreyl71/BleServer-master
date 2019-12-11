@@ -24,6 +24,7 @@ import android.os.Handler;
 import android.os.ParcelUuid;
 import android.support.annotation.RequiresApi;
 
+import cc.noharry.bleserver.ContentValue.BFrameConst;
 import cc.noharry.bleserver.bean.MsgBean;
 import cc.noharry.bleserver.utils.L;
 
@@ -64,6 +65,7 @@ public class BLEAdmin {
      * 数据包发过来的时候
      * 总包个数、即将发送的 msgId
      */
+    private int msgId;
     private int totalCount;
     private int startMsgId;
 
@@ -235,12 +237,15 @@ public class BLEAdmin {
             bluetoothGattServer.cancelConnection(currentDevice);
         }
 
-        // 重新开始广播
-        startAdvertiser();
+        // 不要在这里重新开始广播，逻辑放到连接状态监听中
+//        startAdvertiser();
 
     }
 
 
+    /**
+     * BLE 开启状态监听
+     */
     private class BTStateReceiver extends BroadcastReceiver {
 
         @Override
@@ -329,6 +334,23 @@ public class BLEAdmin {
          */
         mBluetoothLeAdvertiser = mBluetoothAdapter.getBluetoothLeAdvertiser();
 
+        /**
+         * 广播成功或者失败的回调
+         */
+        mCallback = new AdvertiseCallback() {
+
+            @Override
+            public void onStartSuccess(AdvertiseSettings settingsInEffect) {
+                L.i("BLE advertisement added successfully");
+                initServices(mContext);
+            }
+
+            @Override
+            public void onStartFailure(int errorCode) {
+                L.e("Failed to add BLE advertisement, reason: " + errorCode);
+            }
+        };
+
         // 开始广播
         startAdvertiser();
 
@@ -339,24 +361,13 @@ public class BLEAdmin {
      */
     private void startAdvertiser() {
 
-        // 广播成功或者失败的回调
-        mCallback = new AdvertiseCallback() {
-
-            @Override
-            public void onStartSuccess(AdvertiseSettings settingsInEffect) {
-                L.i("BLE advertisement added successfully");
-                initServices(mContext);
-
-            }
-
-            @Override
-            public void onStartFailure(int errorCode) {
-                L.e("Failed to add BLE advertisement, reason: " + errorCode);
-            }
-        };
+        L.e("startAdvertiser");
+        L.e("callback = " + mCallback);
 
         // 开启广播
         mBluetoothLeAdvertiser.startAdvertising(mSettings, mAdvertiseData, mScanResponseData, mCallback);
+
+        L.e("callback = " + mCallback);
 
     }
 
@@ -364,8 +375,8 @@ public class BLEAdmin {
      * 停止广播
      */
     private void stopAdvertiser() {
+        L.e("callback = " + mCallback);
         mBluetoothLeAdvertiser.stopAdvertising(mCallback);
-        mCallback = null;
     }
 
     public void changeData() {
@@ -426,6 +437,8 @@ public class BLEAdmin {
         bluetoothGattServer.addService(service);
         L.e("1、initServices ok");
 
+        L.e("callback = " + mCallback);
+
     }
 
     // 接收消息的 ID 池，用来去重
@@ -452,14 +465,16 @@ public class BLEAdmin {
             currentDevice = device;
             isUserAuth = false;
 
-            // 停止广播
-            stopAdvertiser();
+            L.e("3、onConnectionStateChange---mCallback = " + mCallback);
+            // 不能在这里停止广播，否则会造成主设备无法回调 onServicesDiscovered
+//            stopAdvertiser();
 
             // 判断连接状态，0 为未连接，2 为已连接
             if (newState == 2) {
                 L.i("已连接");
             } else if (newState == 0) {
                 // 断开连接，重新开始广播
+                stopAdvertiser();
                 startAdvertiser();
             }
 
@@ -508,21 +523,22 @@ public class BLEAdmin {
             L.e(String.format("3.onCharacteristicWriteRequest：device name = %s, address = %s", device.getName(), device.getAddress()));
             L.i("3.收到数据 hex:" + byte2HexStr(requestBytes) + " str:" + new String(requestBytes) + " 长度:" + requestBytes.length);
 
-            // 用来判断 msgId 的缓存 byte 数组
-            byte[] tempByte = new byte[4];
-            System.arraycopy(requestBytes, 1, tempByte, 0, 4);
+            if (requestBytes[0] == (byte) 0xFF) {
 
-            int msgId = byteArrayToInt(tempByte);
-            // 2019/11/28 根据 msgId 的定义规则做相应处理
-            L.i("msgId = " + msgId);
-            if (msgIdSet.contains(msgId)) {
-                return;
-            }
-            // 加入 ID 池，方便下次判断
-            msgIdSet.add(msgId);
+                // 开始传输数据，此时为首包
+                // 用来判断 msgId 的缓存 byte 数组
+                byte[] tempByte = new byte[4];
+//            System.arraycopy(requestBytes, 1, tempByte, 0, 4);
+                System.arraycopy(requestBytes, 0, tempByte, 0, 4);
 
-            // 判断是首包还是内容包
-            if (msgId == 1) {
+                msgId = byteArrayToInt(tempByte);
+                // 2019/11/28 根据 msgId 的定义规则做相应处理
+                L.i("msgId = " + msgId);
+                if (msgIdSet.contains(msgId)) {
+                    return;
+                }
+                // 加入 ID 池，方便下次判断
+                msgIdSet.add(msgId);
 
                 // 获取开始时间
                 startTimeMillis = System.currentTimeMillis();
@@ -531,8 +547,10 @@ public class BLEAdmin {
                 // 首包内代表数据包的个数的 byte 数组
                 byte[] totalCountByte = new byte[4];
                 System.arraycopy(requestBytes, 5, totalCountByte, 0, 4);
+//                System.arraycopy(requestBytes, 4, totalCountByte, 0, 4);
                 byte[] startMsgIdByte = new byte[4];
                 System.arraycopy(requestBytes, 9, startMsgIdByte, 0, 4);
+//                System.arraycopy(requestBytes, 8, startMsgIdByte, 0, 4);
                 // 计算总包个数
                 totalCount = byteArrayToInt(totalCountByte);
                 // 计算即将发包的起始 msgId
@@ -540,15 +558,64 @@ public class BLEAdmin {
                 L.i("start---totalCount = " + totalCount);
                 L.i("start---startMsgId = " + startMsgId);
 
-            } else if (msgId < 2000) {
+                // 首包接收完成，先跳出去，等待接收下一个包
+                return;
+
+            }
+
+            // 用来判断 msgId 的缓存 byte 数组
+//            byte[] tempByte = new byte[4];
+////            System.arraycopy(requestBytes, 1, tempByte, 0, 4);
+//            System.arraycopy(requestBytes, 0, tempByte, 0, 4);
+//
+//            int msgId = byteArrayToInt(tempByte);
+//            // 2019/11/28 根据 msgId 的定义规则做相应处理
+//            L.i("msgId = " + msgId);
+//            if (msgIdSet.contains(msgId)) {
+//                return;
+//            }
+//            // 加入 ID 池，方便下次判断
+//            msgIdSet.add(msgId);
+
+            // 判断是否为首包
+//            if (msgId == 1) {
+//
+//                // 获取开始时间
+//                startTimeMillis = System.currentTimeMillis();
+//
+//                // 暂定为1代表发送首包，内含即将要发的数据包的个数
+//                // 首包内代表数据包的个数的 byte 数组
+//                byte[] totalCountByte = new byte[4];
+////                System.arraycopy(requestBytes, 5, totalCountByte, 0, 4);
+//                System.arraycopy(requestBytes, 4, totalCountByte, 0, 4);
+//                byte[] startMsgIdByte = new byte[4];
+////                System.arraycopy(requestBytes, 9, startMsgIdByte, 0, 4);
+//                System.arraycopy(requestBytes, 8, startMsgIdByte, 0, 4);
+//                // 计算总包个数
+//                totalCount = byteArrayToInt(totalCountByte);
+//                // 计算即将发包的起始 msgId
+//                startMsgId = byteArrayToInt(startMsgIdByte);
+//                L.i("start---totalCount = " + totalCount);
+//                L.i("start---startMsgId = " + startMsgId);
+//
+//            } else if (msgId < 2000) {
+//
+//                // 解析 TOKEN 校验数据包
+//                parseTokenPackage(requestBytes, msgId);
+//
+//            } else {
+//                // 解析普通内容数据包
+//                parseContentPackage(requestBytes, msgId);
+//
+//            }
+            if (msgId == BFrameConst.START_MSG_ID_UNIQUE) {
 
                 // 解析 TOKEN 校验数据包
                 parseTokenPackage(requestBytes, msgId);
 
-            } else {
+            } else if (msgId == BFrameConst.START_MSG_ID_CONTENT) {
                 // 解析普通内容数据包
                 parseContentPackage(requestBytes, msgId);
-
             }
 
             // 发送给client的响应
@@ -638,13 +705,15 @@ public class BLEAdmin {
     private void parseTokenPackage(byte[] requestBytes, int msgId) {
 
         // 内容字节数组
-        byte[] contentByte = new byte[14];
-        System.arraycopy(requestBytes, 5, contentByte, 0, 14);
+//        byte[] contentByte = new byte[14];
+//        System.arraycopy(requestBytes, 5, contentByte, 0, 14);
+        byte[] contentByte = new byte[20];
+        System.arraycopy(requestBytes, 0, contentByte, 0, 20);
 
         MsgBean msgBean = new MsgBean();
         msgBean.setHexStr(byte2HexStr(requestBytes));
         msgBean.setMsgShowStr(new String(requestBytes));
-        msgBean.setMsgId(String.valueOf(msgId));
+        msgBean.setMsgId(msgId);
         activity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
@@ -656,24 +725,24 @@ public class BLEAdmin {
         L.i("startMsgId = " + startMsgId);
         L.i("totalCount = " + totalCount);
         L.i("receiveCount = " + msgIdSet.size());
-        if (msgId == (startMsgId + totalCount - 1)) {
-            // 暂时只传四条：1000,1001,1002,1003
-            msgIdSet.clear();
-            // 获取结束时间
-            endTimeMillis = System.currentTimeMillis();
-            L.i("complete---startTimeMillis = " + startTimeMillis);
-            L.i("complete---endTimeMillis = " + endTimeMillis);
-            L.i("complete---耗时 = " + (endTimeMillis - startTimeMillis) + "ms---" + (endTimeMillis - startTimeMillis) / 1000 + "s");
-
-            // TODO: 2019/12/10  代表主设备发送 TOKEN 过来，等待校验
-            activity.runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    msgReceiveListener.onReceiveTokenComplete();
-                }
-            });
-
-        }
+//        if (msgId == (startMsgId + totalCount - 1)) {
+//            // 暂时只传四条：1000,1001,1002,1003
+//            msgIdSet.clear();
+//            // 获取结束时间
+//            endTimeMillis = System.currentTimeMillis();
+//            L.i("complete---startTimeMillis = " + startTimeMillis);
+//            L.i("complete---endTimeMillis = " + endTimeMillis);
+//            L.i("complete---耗时 = " + (endTimeMillis - startTimeMillis) + "ms---" + (endTimeMillis - startTimeMillis) / 1000 + "s");
+//
+//            // TODO: 2019/12/10  代表主设备发送 TOKEN 过来，等待校验
+//            activity.runOnUiThread(new Runnable() {
+//                @Override
+//                public void run() {
+//                    msgReceiveListener.onReceiveTokenComplete();
+//                }
+//            });
+//
+//        }
 
     }
 
@@ -692,13 +761,15 @@ public class BLEAdmin {
         }
 
         // 内容字节数组
-        byte[] contentByte = new byte[14];
-        System.arraycopy(requestBytes, 5, contentByte, 0, 14);
+//        byte[] contentByte = new byte[14];
+//        System.arraycopy(requestBytes, 5, contentByte, 0, 14);
+        byte[] contentByte = new byte[20];
+        System.arraycopy(requestBytes, 0, contentByte, 0, 20);
 
         MsgBean msgBean = new MsgBean();
         msgBean.setHexStr(byte2HexStr(requestBytes));
         msgBean.setMsgShowStr(new String(requestBytes));
-        msgBean.setMsgId(String.valueOf(msgId));
+        msgBean.setMsgId(msgId);
         activity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
@@ -710,23 +781,25 @@ public class BLEAdmin {
         L.i("startMsgId = " + startMsgId);
         L.i("totalCount = " + totalCount);
         L.i("receiveCount = " + msgIdSet.size());
-        if (msgId == (startMsgId + totalCount - 1)) {
-            // 暂时只传四条：1000,1001,1002,1003
-            msgIdSet.clear();
-            // 获取结束时间
-            endTimeMillis = System.currentTimeMillis();
-            L.i("complete---startTimeMillis = " + startTimeMillis);
-            L.i("complete---endTimeMillis = " + endTimeMillis);
-            L.i("complete---耗时 = " + (endTimeMillis - startTimeMillis) + "ms---" + (endTimeMillis - startTimeMillis) / 1000 + "s");
 
-            activity.runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    msgReceiveListener.onReceiveMsgComplete();
-                }
-            });
-
-        }
+        // TODO: 2019/12/11 接收数据完成的判断放在接收数据的回调中，判断末尾一位是不是 0x00
+//        if (msgId == (startMsgId + totalCount - 1)) {
+//            // 暂时只传四条：1000,1001,1002,1003
+//            msgIdSet.clear();
+//            // 获取结束时间
+//            endTimeMillis = System.currentTimeMillis();
+//            L.i("complete---startTimeMillis = " + startTimeMillis);
+//            L.i("complete---endTimeMillis = " + endTimeMillis);
+//            L.i("complete---耗时 = " + (endTimeMillis - startTimeMillis) + "ms---" + (endTimeMillis - startTimeMillis) / 1000 + "s");
+//
+//            activity.runOnUiThread(new Runnable() {
+//                @Override
+//                public void run() {
+//                    msgReceiveListener.onReceiveMsgComplete();
+//                }
+//            });
+//
+//        }
 
     }
 

@@ -2,15 +2,15 @@ package cc.noharry.bleserver.bean;
 
 public class MsgBean {
 
-    private String msgId;
+    private int msgId;
     private String hexStr;
     private String msgShowStr;
 
-    public String getMsgId() {
+    public int getMsgId() {
         return msgId;
     }
 
-    public void setMsgId(String msgId) {
+    public void setMsgId(int msgId) {
         this.msgId = msgId;
     }
 

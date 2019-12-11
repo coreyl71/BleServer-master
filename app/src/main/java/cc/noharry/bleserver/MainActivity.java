@@ -16,6 +16,7 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import cc.noharry.bleserver.ContentValue.BFrameConst;
 import cc.noharry.bleserver.ContentValue.ContantValue;
 import cc.noharry.bleserver.bean.MsgBean;
 import cc.noharry.bleserver.ble.BLEAdmin;
@@ -171,13 +172,13 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
     }
 
 
-
     /**
      * 获取消息列表数据
      */
     @Override
     public void onReceiveMsg(MsgBean msgBean, byte[] contentByte) {
 
+        isReceiveTokenComplete = false;
 //        this.msgList.add(msgBean);
 //
 //        if (null != msgList && msgList.size() != 0) {
@@ -186,7 +187,18 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
 
         this.contentBytes.add(contentByte);
 
+        // TODO: 2019/12/11 之后要判断是接收哪种消息，做相应处理
+        if (contentByte[contentByte.length - 1] == (byte) 0x00) {
+            if (msgBean.getMsgId() == BFrameConst.START_MSG_ID_UNIQUE) {
+                receiveTokenCompleted();
+            } else if (msgBean.getMsgId() == BFrameConst.START_MSG_ID_CONTENT) {
+                receiveMsgComplete();
+            }
+        }
+
     }
+
+    private boolean isReceiveTokenComplete = false;
 
     /**
      * 获取TOKEN完成
@@ -194,6 +206,13 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
      */
     @Override
     public void onReceiveTokenComplete() {
+
+        receiveTokenCompleted();
+
+    }
+
+    private void receiveTokenCompleted() {
+        isReceiveTokenComplete = true;
 
         L.i("onReceiveTokenComplete");
         if (null != contentBytes && contentBytes.size() != 0) {
@@ -208,10 +227,15 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
             // 转成字符串
             remoteTokenReceived = new String(contentBytesConcat);
 
+            L.e("onReceiveTokenComplete---remoteTokenReceived = " + remoteTokenReceived);
+            L.e("onReceiveTokenComplete---remoteTokenSP = " + remoteTokenSP);
             // 将收到的主设备 Token 和本地的对比，如果不一致则需要用户授权
             if (!TextUtils.isEmpty(remoteTokenReceived) && !TextUtils.isEmpty(remoteTokenSP)) {
 
-                if (!TextUtils.equals(remoteTokenReceived, remoteTokenSP)) {
+                boolean isMatch = TextUtils.equals(remoteTokenReceived, remoteTokenSP);
+                L.e("onReceiveTokenComplete---remoteTokenSP = " + isMatch);
+                // 不匹配，则需要用户授权
+                if (!isMatch) {
 
                     // 需要用户授权
                     needUserAuth = true;
@@ -241,9 +265,7 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
             }
 
         }
-
     }
-
 
 
     /**
@@ -251,6 +273,10 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
      */
     @Override
     public void onReceiveMsgComplete() {
+        receiveMsgComplete();
+    }
+
+    private void receiveMsgComplete() {
         L.i("onReceiveMsgComplete");
         if (null != contentBytes && contentBytes.size() != 0) {
             // 计算总字节长度
@@ -265,7 +291,6 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
             // 显示
             tv_final_msg_show.setText(finalStr);
         }
-
     }
 
     /**
@@ -338,7 +363,7 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
                 // 字符串转换成 Byte 数组
                 byte[] dataBytes = resultStr.getBytes(StandardCharsets.UTF_8);
                 // 数据分包
-                subpackageByte(dataBytes);
+                subpackageByte(dataBytes, BFrameConst.START_MSG_ID_CONTENT);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -365,75 +390,253 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
      *
      * @param data 数据源
      */
-    private void subpackageByte(byte[] data) {
+    private void subpackageByte(byte[] data, int msg_id) {
+
+        // 连接间隔时间修改
+//        if (Build.VERSION.SDK_INT >= VERSION_CODES.LOLLIPOP) {
+//            mBluetoothGatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH);
+//        }
 
         isWritingEntity = true;
+        // 数据源数组的指针
         int index = 0;
-        int length = data.length;
-        int availableLength = length;
+        // 数据总长度
+        int dataLength = data.length;
+        // 待传数据有效长度，最后一个包是否需要补零
+        int availableLength = dataLength;
+        // 待发送数据包的个数
+//        int packageCount = ((dataLength % 14 == 0) ? (dataLength / 14) : (dataLength / 14 + 1));
+        int packageCount = ((dataLength % 18 == 0) ? (dataLength / 18) : (dataLength / 18 + 1));
 
-        while (index < length) {
+        // 重试次数
+        int retryCount = 0;
+        // 是否消息开始第一个包，内含消息分包的个数
+        boolean isMsgStart = true;
 
+        while (index < dataLength) {
+
+            // 未就绪，可能没收到返回，或未成功写入
             if (!isWritingEntity) {
-                L.e("写入取消");
-            }
 
-            // 每包大小为 20
-            int onePackLength = packLength;
-            //最后一包不足数据字节不会自动补零
-            if (!lastPackComplete) {
-                onePackLength = (availableLength >= packLength ? packLength : availableLength);
-            }
+                // 小于五次则等待，多于五次（250ms）则重发
+                if (retryCount < 5) {
 
-            byte[] txBuffer = new byte[onePackLength];
+                    L.e("等待分包");
+                    try {
+                        Thread.sleep(20L);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                    retryCount++;
+                    continue;
 
-            txBuffer[0] = 0x00;
-            for (int i = 0; i < onePackLength; i++) {
-                if (index < length) {
-                    txBuffer[i] = data[index++];
+                } else {
+
+                    // 重置次数，方便下次阻塞的时候计数
+                    retryCount = 0;
+
                 }
+
+            }
+            L.e("开始分包");
+            // 开始分包，状态置为未就绪状态
+            isWritingEntity = false;
+
+            // 每包数据内容大小为 14
+//            int onePackLength = packLength - 6;
+            int onePackLength = packLength - 4;
+            // 最后一包不足长度不会自动补零
+            if (!lastPackComplete) {
+//                onePackLength = (availableLength >= (packLength - 6) ? (packLength - 6) : availableLength);
+                onePackLength = (availableLength >= (packLength - 4) ? (packLength - 4) : availableLength);
             }
 
-            availableLength -= onePackLength;
+            // 实例化一个数据分包，长度为 20
+//            byte[] txBuffer = new byte[onePackLength];
+            byte[] txBuffer = new byte[packLength];
 
-            // 单个数据包发送
-            boolean result = BLEAdmin.getInstance(this).sendMessage(txBuffer);
+            // 数据包头 (byte)0xFF
+//            txBuffer[0] = BFrameConst.FRAME_HEAD;
+            // 数据包尾 (byte)0x00;
+//            txBuffer[19] = BFrameConst.FRAME_END;
 
-            if (!result) {
-//                if(mBleEntityLisenter != null) {
-//                    mBleEntityLisenter.onWriteFailed();
-                isWritingEntity = false;
-                isAutoWriteMode = false;
-//                    return false;
+            byte[] msgIdByte;
+            byte[] packageCountByte;
+            byte[] msgStartIdByte;
+            if (isMsgStart) {
+
+                // 数据包 [1]-[4] 为 msgId，起始位的 msgId 为 1，代表只发送头部信息，包含消息分包的个数
+                msgIdByte = int2byte(BFrameConst.START_MSG_ID_START);
+                packageCountByte = int2byte(packageCount);
+                msgStartIdByte = int2byte(msg_id);
+
+
+                /**
+                 * 首包数组拷贝
+                 * 原数组
+                 * 元数据的起始位置
+                 * 目标数组
+                 * 目标数组的开始起始位置
+                 * 要 copy 的数组的长度
+                 */
+//                System.arraycopy(msgIdByte, 0, txBuffer, 1, BFrameConst.MESSAGE_ID_LENGTH);
+//                System.arraycopy(packageCountByte, 0, txBuffer, 5, BFrameConst.MESSAGE_ID_LENGTH);
+//                System.arraycopy(msgStartIdByte, 0, txBuffer, 9, BFrameConst.MESSAGE_ID_LENGTH);
+                System.arraycopy(msgIdByte, 0, txBuffer, 0, BFrameConst.MESSAGE_ID_LENGTH);
+                System.arraycopy(packageCountByte, 0, txBuffer, 4, BFrameConst.MESSAGE_ID_LENGTH);
+                System.arraycopy(msgStartIdByte, 0, txBuffer, 8, BFrameConst.MESSAGE_ID_LENGTH);
+
+                // 单个数据包发送
+//                boolean result = write(txBuffer);
+                boolean result = BLEAdmin.getInstance(this).sendMessage(txBuffer);
+
+//                if (!result) {
+//                    isWritingEntity = false;
 //                }
+
+                // 将是否为首包置为false，后面的开始发正式数据
+                isMsgStart = false;
+
             } else {
-//                if (mBleEntityLisenter != null) {
-                double progress = new BigDecimal((float) index / length).setScale(2, BigDecimal.ROUND_HALF_UP).doubleValue();
-//                    mBleEntityLisenter.onWriteProgress(progress);
-//                }
+
+                // 数据包 [1]-[4] 为 msgId
+                msgIdByte = int2byte(msg_id);
+                L.i("msgId = " + msg_id);
+                // TODO: 2019/12/2 应该在收到 Server 回调的时候，做递增
+                msg_id++;
+
+
+                /**
+                 * 数组拷贝
+                 * 原数组
+                 * 元数据的起始位置
+                 * 目标数组
+                 * 目标数组的开始起始位置
+                 * 要 copy 的数组的长度
+                 */
+//                System.arraycopy(msgIdByte, 0, txBuffer, 1, BFrameConst.MESSAGE_ID_LENGTH);
+                System.arraycopy(msgIdByte, 0, txBuffer, 0, BFrameConst.MESSAGE_ID_LENGTH);
+
+                // 数据包 [5]-[18] 为内容
+                for (int i = 4; i < onePackLength + 4; i++) {
+                    if (index < dataLength) {
+                        txBuffer[i] = data[index++];
+                    }
+                }
+//                L.i("index = " + index);
+//                L.i("onePackLength = " + onePackLength);
+//                L.i("dataLength = " + dataLength);
+
+                // 更新剩余数据长度
+                availableLength -= onePackLength;
+
+                // 单个数据包发送
+//                boolean result = write(txBuffer);
+                boolean result = BLEAdmin.getInstance(this).sendMessage(txBuffer);
+
             }
 
-//            if (autoWriteMode) {
-//                synchronized (lock) {
-//                    try {
-////                        lock.wait(500);
-//                        lock.wait();
-//                    } catch (InterruptedException e) {
-//                        e.printStackTrace();
-//                    }
-//                }
-//            } else {
             try {
-                Thread.sleep(100L);
+                Thread.sleep(20L);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-//            }
+
+
         }
 
+        // 连接间隔时间修改
+//        if (Build.VERSION.SDK_INT >= VERSION_CODES.LOLLIPOP) {
+//            mBluetoothGatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_BALANCED);
+//        }
         L.e("写入完成");
 
     }
+
+    public static byte[] int2byte(int res) {
+        byte[] targets = new byte[4];
+
+        targets[3] = (byte) (res & 0xff);// 最低位
+        targets[2] = (byte) ((res >> 8) & 0xff);// 次低位
+        targets[1] = (byte) ((res >> 16) & 0xff);// 次高位
+        targets[0] = (byte) (res >>> 24);// 最高位,无符号右移。
+        return targets;
+    }
+
+//    /**
+//     * 数据分包
+//     *
+//     * @param data 数据源
+//     */
+//    private void subpackageByte(byte[] data) {
+//
+//        isWritingEntity = true;
+//        int index = 0;
+//        int length = data.length;
+//        int availableLength = length;
+//
+//        while (index < length) {
+//
+//            if (!isWritingEntity) {
+//                L.e("写入取消");
+//            }
+//
+//            // 每包大小为 20
+//            int onePackLength = packLength;
+//            //最后一包不足数据字节不会自动补零
+//            if (!lastPackComplete) {
+//                onePackLength = (availableLength >= packLength ? packLength : availableLength);
+//            }
+//
+//            byte[] txBuffer = new byte[onePackLength];
+//
+//            txBuffer[0] = 0x00;
+//            for (int i = 0; i < onePackLength; i++) {
+//                if (index < length) {
+//                    txBuffer[i] = data[index++];
+//                }
+//            }
+//
+//            availableLength -= onePackLength;
+//
+//            // 单个数据包发送
+//            boolean result = BLEAdmin.getInstance(this).sendMessage(txBuffer);
+//
+//            if (!result) {
+////                if(mBleEntityLisenter != null) {
+////                    mBleEntityLisenter.onWriteFailed();
+//                isWritingEntity = false;
+//                isAutoWriteMode = false;
+////                    return false;
+////                }
+//            } else {
+////                if (mBleEntityLisenter != null) {
+//                double progress = new BigDecimal((float) index / length).setScale(2, BigDecimal.ROUND_HALF_UP).doubleValue();
+////                    mBleEntityLisenter.onWriteProgress(progress);
+////                }
+//            }
+//
+////            if (autoWriteMode) {
+////                synchronized (lock) {
+////                    try {
+//////                        lock.wait(500);
+////                        lock.wait();
+////                    } catch (InterruptedException e) {
+////                        e.printStackTrace();
+////                    }
+////                }
+////            } else {
+//            try {
+//                Thread.sleep(100L);
+//            } catch (InterruptedException e) {
+//                e.printStackTrace();
+//            }
+////            }
+//        }
+//
+//        L.e("写入完成");
+//
+//    }
 
     /**
      * 开启蓝牙
@@ -495,6 +698,10 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
             return true;
         }
 
+        if (!isReceiveTokenComplete) {
+            return true;
+        }
+
         // 获取具体的按键类型
         KEY_ACTION_TYPE = getKeyActionType(keyCode, event);
         Log.e(ContantValue.TAG, "KEY_ACTION_TYPE == " + KEY_ACTION_TYPE);
@@ -525,7 +732,8 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
 
     /**
      * 刷新 SP 中存储的主设备 Token
-     * @param remoteTokenStr    待存入的主设备 Token
+     *
+     * @param remoteTokenStr 待存入的主设备 Token
      */
     private void updateRemoteTokenSP(String remoteTokenStr) {
 
@@ -540,6 +748,7 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
 
     /**
      * 确保存储主设备 Token 成功
+     *
      * @param editor
      */
     private void saveRemoteToken(SharedPreferences.Editor editor) {

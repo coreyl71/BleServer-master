@@ -48,16 +48,7 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
     private EditText et_msg_to_send;
     // 最终拼接消息显示
     private TextView tv_final_msg_show;
-    // 消息接收显示列表
-//    private RecyclerView rcv_msg_show;
-    // 布局管理器
-//    private LinearLayoutManager llm;
-    // 列表适配器
-//    private MsgShowAdapter msgShowAdapter;
-    /**
-     * 消息列表
-     */
-    private List<MsgBean> msgList;
+
     /**
      * 用来保存数据分包的集合
      */
@@ -69,12 +60,18 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
     private LinearLayout ll_ble_connect_info;
     private TextView tv_ble_device_name, tv_ble_device_address;
 
+    // 获取开始接收消息和接收数据完成的时间
+    private long startTimeMillis, endTimeMillis;
+
+    // 接收到的消息类型
+    private int msgType;
+
     // 本地保存的主设备 Token
     private String remoteTokenSP;
     // 接收到的主设备 Token
     private String remoteTokenReceived;
-    // 是否需要用户授权，主要用于做按键拦截的判断
-    private boolean needUserAuth;
+    // 是否正在接收 Token 数据，用来屏蔽按键
+    private boolean isReceiveTokenComplete = false;
 
 
     private UUID UUID_SERVER = UUID.fromString("0000ffe5-0000-1000-8000-00805f9b34fb");
@@ -104,23 +101,16 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
         // 点击事件监听
         setOnClickListener();
 
-//        if (null != msgList) {
-//            msgList.clear();
-//        } else {
-//            msgList = new ArrayList<>();
-//        }
+        // 初始化消息类型
+        msgType = -1;
+
+        // 初始化消息数据包的列表
         if (null == contentBytes) {
             contentBytes = new ArrayList<>();
         } else {
             contentBytes.clear();
         }
-//
-//
-//        // 设置适配器
-//        setAdapter();
 
-        // 不需要用户授权
-        needUserAuth = false;
         // 获取本地保存的主设备 Token
         getRemoteDeviceToken();
 
@@ -138,128 +128,118 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
 
     }
 
-
-    /**
-     * 收到请求连接的消息
-     */
-    @Override
-    public void onApplyConnection(BluetoothDevice device) {
-
-        L.i("conn---deviceName = " + device.getName());
-        L.i("conn---deviceAddress = " + device.getAddress());
-
-        // 显示用户确认连接 BLE 的弹框
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                ll_ble_connect_info.setVisibility(View.VISIBLE);
-                if (!TextUtils.isEmpty(device.getName())) {
-                    tv_ble_device_name.setVisibility(View.VISIBLE);
-                    tv_ble_device_name.setText(device.getName());
-                } else {
-                    tv_ble_device_name.setVisibility(View.GONE);
-                }
-                if (!TextUtils.isEmpty(device.getAddress())) {
-                    tv_ble_device_address.setVisibility(View.VISIBLE);
-                    tv_ble_device_address.setText(device.getAddress());
-                } else {
-                    tv_ble_device_address.setVisibility(View.GONE);
-                }
-            }
-        });
-
-
-    }
-
-
     /**
      * 获取消息列表数据
      */
     @Override
-    public void onReceiveMsg(MsgBean msgBean, byte[] contentByte) {
+    public void onReceiveMsg(int msg_type, byte[] contentByte) {
 
+        // 此时正在接收数据，拦截点击事件
         isReceiveTokenComplete = false;
-//        this.msgList.add(msgBean);
-//
-//        if (null != msgList && msgList.size() != 0) {
-//            setAdapter();
-//        }
 
+        // 先看 msgType 是否一致，如果不一致则需要先将之前的数据包 list 清空
+        if (msgType != msg_type) {
+            // 获取开始时间
+            startTimeMillis = System.currentTimeMillis();
+            contentBytes.clear();
+            // 即时刷新数据类型，避免影响下个数据包传过来时的判断
+            msgType = msg_type;
+        }
+
+        // 添加接收到的 byte 数组到 list 中，接收完成之后做拼接
         this.contentBytes.add(contentByte);
 
-        // TODO: 2019/12/11 之后要判断是接收哪种消息，做相应处理
+        // 读到定义的数据包末尾，代表数据已经传输完毕
         if (contentByte[contentByte.length - 1] == (byte) 0x00) {
-            if (msgBean.getMsgId() == BFrameConst.START_MSG_ID_UNIQUE) {
-                receiveTokenCompleted();
-            } else if (msgBean.getMsgId() == BFrameConst.START_MSG_ID_CONTENT) {
-                receiveMsgComplete();
+
+            // 此种类型的数据包接收完毕，重置数据类型，方便下次传数据的时候判断
+            msgType = -1;
+            // 获取结束时间
+            endTimeMillis = System.currentTimeMillis();
+            L.i("complete---耗时 = " + (endTimeMillis - startTimeMillis) + "ms---" + (endTimeMillis - startTimeMillis) / 1000 + "s");
+
+            /**
+             * 根据数据类型来做后续操作
+             * 是 Token 还是普通内容数据
+             * 普通内容数据之后还要分为用户信息、健康数据、位置信息等
+             */
+            switch (msg_type) {
+
+                case BFrameConst.START_MSG_ID_UNIQUE:
+                    // 接收 Token 数据包完毕
+                    receiveTokenCompleted();
+                    break;
+
+                case BFrameConst.START_MSG_ID_CONTENT:
+                    // 接收普通内容数据包完毕
+                    receiveMsgComplete();
+                    break;
+
+                default:
+                    break;
+
             }
+
         }
 
     }
 
-    private boolean isReceiveTokenComplete = false;
-
     /**
-     * 获取TOKEN完成
-     * 与本地 TOKEN 比对，一致则同意连接，否则弹框需用户同意
+     * 接收 Token 数据包完成
      */
-    @Override
-    public void onReceiveTokenComplete() {
-
-        receiveTokenCompleted();
-
-    }
-
     private void receiveTokenCompleted() {
+
+        // 接收 Token 数据完成，可以点击
         isReceiveTokenComplete = true;
 
-        L.i("onReceiveTokenComplete");
         if (null != contentBytes && contentBytes.size() != 0) {
 
             // 计算总字节长度
-            int contentByteLength = contentBytes.size() * 14;
+            int contentByteLength = contentBytes.size() * 20;
             // 待拼接数组，最终用来转换字符串显示
             byte[] contentBytesConcat = new byte[contentByteLength];
             for (int i = 0; i < contentBytes.size(); i++) {
-                System.arraycopy(contentBytes.get(i), 0, contentBytesConcat, i * 14, 14);
+                System.arraycopy(contentBytes.get(i), 0, contentBytesConcat, i * 20, 20);
             }
             // 转成字符串
             remoteTokenReceived = new String(contentBytesConcat);
 
             L.e("onReceiveTokenComplete---remoteTokenReceived = " + remoteTokenReceived);
             L.e("onReceiveTokenComplete---remoteTokenSP = " + remoteTokenSP);
+            L.e("onReceiveTokenComplete---remoteTokenSP.isEmpty = " + TextUtils.isEmpty(remoteTokenSP));
             // 将收到的主设备 Token 和本地的对比，如果不一致则需要用户授权
-            if (!TextUtils.isEmpty(remoteTokenReceived) && !TextUtils.isEmpty(remoteTokenSP)) {
+            // 如果本地存储为空
+            if (TextUtils.isEmpty(remoteTokenSP)) {
 
-                boolean isMatch = TextUtils.equals(remoteTokenReceived, remoteTokenSP);
-                L.e("onReceiveTokenComplete---remoteTokenSP = " + isMatch);
-                // 不匹配，则需要用户授权
-                if (!isMatch) {
+                L.e("本地为空，需要弹框用户授权");
 
-                    // 需要用户授权
-                    needUserAuth = true;
-                    // TODO: 2019/12/10 弹框需要用户授权，同意连接才刷新本地 SP
-                    ll_ble_connect_info.setVisibility(View.VISIBLE);
-                    tv_ble_device_address.setVisibility(View.GONE);
+                // 弹用户授权对话框
+                showUserAuthDialog();
 
-//                    if (!TextUtils.isEmpty(remoteTokenStr)) {
-//                        tv_ble_device_address.setVisibility(View.VISIBLE);
-//                        tv_ble_device_address.setText(remoteTokenStr);
-//                    } else {
-//                        tv_ble_device_address.setVisibility(View.GONE);
-//                    }
+            } else {
 
-                    // 刷新 SP 中存储的主设备 Token
-                    updateRemoteTokenSP(remoteTokenReceived);
+                if (!TextUtils.isEmpty(remoteTokenReceived)) {
+
+                    boolean isMatch = TextUtils.equals(remoteTokenReceived, remoteTokenSP);
+                    L.e("onReceiveTokenComplete---remoteTokenSP = " + isMatch);
+                    // 不匹配，则需要用户授权
+                    if (!isMatch) {
+                        // 弹用户授权对话框
+                        showUserAuthDialog();
+
+                    } else {
+
+                        // 不需要用户授权，直接连接
+                        ll_ble_connect_info.setVisibility(View.GONE);
+                        // 将判断值设置为同意连接，这样可以接收到后面传输的内容数据包
+                        BLEAdmin.getInstance(this).agreeConnection();
+
+                    }
 
                 } else {
-
-                    // 不需要用户授权，直接连接
-                    needUserAuth = false;
-                    // TODO: 2019/12/10 弹框需要用户授权，同意连接才刷新本地 SP
+                    // 2019/12/12 这里主设备未传 token，应该直接断开，弹框消失，拒绝连接
                     ll_ble_connect_info.setVisibility(View.GONE);
-
+                    BLEAdmin.getInstance(this).closeConnection();
                 }
 
             }
@@ -267,37 +247,40 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
         }
     }
 
-
     /**
-     * 获取消息完成
+     * 弹框需要用户授权，同意主设备连接
      */
-    @Override
-    public void onReceiveMsgComplete() {
-        receiveMsgComplete();
+    private void showUserAuthDialog() {
+        // TODO: 2019/12/10 弹框需要用户授权，同意连接才刷新本地 SP
+        ll_ble_connect_info.setVisibility(View.VISIBLE);
+        tv_ble_device_address.setVisibility(View.GONE);
     }
 
+    /**
+     * 接收普通内容数据包完成
+     */
     private void receiveMsgComplete() {
+
         L.i("onReceiveMsgComplete");
         if (null != contentBytes && contentBytes.size() != 0) {
+
             // 计算总字节长度
-            int contentByteLength = contentBytes.size() * 14;
+            int contentByteLength = contentBytes.size() * 20;
+
             // 待拼接数组，最终用来转换字符串显示
             byte[] contentBytesConcat = new byte[contentByteLength];
             for (int i = 0; i < contentBytes.size(); i++) {
-                System.arraycopy(contentBytes.get(i), 0, contentBytesConcat, i * 14, 14);
+                System.arraycopy(contentBytes.get(i), 0, contentBytesConcat, i * 20, 20);
             }
+
             // 转成字符串
             String finalStr = new String(contentBytesConcat);
+            LogUtil.showLogCompletion("corey", "onReceiveMsgComplete---finalStr = " + finalStr.trim(), 500);
+
             // 显示
             tv_final_msg_show.setText(finalStr);
-        }
-    }
 
-    /**
-     * 消息回滚、重发
-     */
-    @Override
-    public void onMsgResend() {
+        }
 
     }
 
@@ -563,80 +546,6 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
         return targets;
     }
 
-//    /**
-//     * 数据分包
-//     *
-//     * @param data 数据源
-//     */
-//    private void subpackageByte(byte[] data) {
-//
-//        isWritingEntity = true;
-//        int index = 0;
-//        int length = data.length;
-//        int availableLength = length;
-//
-//        while (index < length) {
-//
-//            if (!isWritingEntity) {
-//                L.e("写入取消");
-//            }
-//
-//            // 每包大小为 20
-//            int onePackLength = packLength;
-//            //最后一包不足数据字节不会自动补零
-//            if (!lastPackComplete) {
-//                onePackLength = (availableLength >= packLength ? packLength : availableLength);
-//            }
-//
-//            byte[] txBuffer = new byte[onePackLength];
-//
-//            txBuffer[0] = 0x00;
-//            for (int i = 0; i < onePackLength; i++) {
-//                if (index < length) {
-//                    txBuffer[i] = data[index++];
-//                }
-//            }
-//
-//            availableLength -= onePackLength;
-//
-//            // 单个数据包发送
-//            boolean result = BLEAdmin.getInstance(this).sendMessage(txBuffer);
-//
-//            if (!result) {
-////                if(mBleEntityLisenter != null) {
-////                    mBleEntityLisenter.onWriteFailed();
-//                isWritingEntity = false;
-//                isAutoWriteMode = false;
-////                    return false;
-////                }
-//            } else {
-////                if (mBleEntityLisenter != null) {
-//                double progress = new BigDecimal((float) index / length).setScale(2, BigDecimal.ROUND_HALF_UP).doubleValue();
-////                    mBleEntityLisenter.onWriteProgress(progress);
-////                }
-//            }
-//
-////            if (autoWriteMode) {
-////                synchronized (lock) {
-////                    try {
-//////                        lock.wait(500);
-////                        lock.wait();
-////                    } catch (InterruptedException e) {
-////                        e.printStackTrace();
-////                    }
-////                }
-////            } else {
-//            try {
-//                Thread.sleep(100L);
-//            } catch (InterruptedException e) {
-//                e.printStackTrace();
-//            }
-////            }
-//        }
-//
-//        L.e("写入完成");
-//
-//    }
 
     /**
      * 开启蓝牙
@@ -652,40 +561,7 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
         BLEAdmin.getInstance(this).initGATTServer();
     }
 
-    /**
-     * 设置列表适配器
-     */
-//    private void setAdapter() {
-//
-//        if (null == msgShowAdapter) {
-//
-//            msgShowAdapter = new MsgShowAdapter(MainActivity.this, msgList);
-//            rcv_msg_show.setAdapter(msgShowAdapter);
-//
-//        } else {
-//            // 刷新适配器
-//            msgShowAdapter.update(msgList);
-//        }
-//
-//    }
-
     private boolean isLoading = false;
-
-//    @Override
-//    public boolean onKeyDown(int keyCode, KeyEvent event) {
-//        if (keyCode == KeyEvent.KEYCODE_BACK) { // 监控/拦截/屏蔽返回键
-//            // 短按按键1，弹框消失，确认连接
-//            ll_ble_connect_info.setVisibility(View.GONE);
-//
-//        } else if (keyCode == KeyEvent.KEYCODE_MENU) {
-//            // 短按按键2，弹框消失，拒绝连接
-//            BLEAdmin.getInstance(this).closeConnection();
-//
-//        } else if (keyCode == KeyEvent.KEYCODE_HOME) {
-//            //这里操作是没有返回结果的
-//        }
-//        return super.onKeyDown(keyCode, event);
-//    }
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
@@ -698,6 +574,7 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
             return true;
         }
 
+        // 如果正在接收 Token 数据，则拦截点击
         if (!isReceiveTokenComplete) {
             return true;
         }
@@ -709,6 +586,8 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
 
             // 短按按键 1，弹框消失，确认连接，保存该设备到本地，下次可以自动连接不弹框
             L.i("同意连接");
+            // Token 变量刷新
+            remoteTokenSP = remoteTokenReceived;
             ll_ble_connect_info.setVisibility(View.GONE);
             // TODO: 2019/12/10 这里需要给一个状态值，用来做 Server 是否继续接收消息的判断
             BLEAdmin.getInstance(this).agreeConnection();

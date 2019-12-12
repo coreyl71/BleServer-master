@@ -65,9 +65,9 @@ public class BLEAdmin {
      * 数据包发过来的时候
      * 总包个数、即将发送的 msgId
      */
-    private int msgId;
+    private int msgType;
     private int totalCount;
-    private int startMsgId;
+//    private int startMsgId;
 
 //    private List<MsgBean> msgList;
 
@@ -79,10 +79,6 @@ public class BLEAdmin {
             msgReceiveListener = (IMsgReceive) context;
         } else {
             throw new IllegalArgumentException("activity must implements IMsgReceive");
-        }
-//        msgList = new ArrayList<>();
-        if (null == msgIdSet) {
-            msgIdSet = new HashSet<>();
         }
         mContext = context.getApplicationContext();
         mBluetoothManager = (BluetoothManager) mContext.getSystemService(Context.BLUETOOTH_SERVICE);
@@ -224,12 +220,15 @@ public class BLEAdmin {
      */
     public void agreeConnection() {
         isUserAuth = true;
+        L.e("agreeConnection---isUserAuth = " + isUserAuth);
     }
 
     /**
      * 用户拒绝连接，断开 BLE 设备的连接
      */
     public void closeConnection() {
+
+        isUserAuth = false;
 
         // TODO: 2019/12/9  断开已建立的连接，或尝试取消当前正在进行的连接尝试。
         L.i("connected = " + mBluetoothManager.getConnectionState(currentDevice, BluetoothProfile.GATT));
@@ -362,12 +361,9 @@ public class BLEAdmin {
     private void startAdvertiser() {
 
         L.e("startAdvertiser");
-        L.e("callback = " + mCallback);
 
         // 开启广播
         mBluetoothLeAdvertiser.startAdvertising(mSettings, mAdvertiseData, mScanResponseData, mCallback);
-
-        L.e("callback = " + mCallback);
 
     }
 
@@ -375,7 +371,6 @@ public class BLEAdmin {
      * 停止广播
      */
     private void stopAdvertiser() {
-        L.e("callback = " + mCallback);
         mBluetoothLeAdvertiser.stopAdvertising(mCallback);
     }
 
@@ -404,6 +399,7 @@ public class BLEAdmin {
          * 获得 BluetoothGattServer 实例
          */
         bluetoothGattServer = mBluetoothManager.openGattServer(context, bluetoothGattServerCallback);
+
         /**
          * 为设备添加相应的 service
          */
@@ -437,12 +433,8 @@ public class BLEAdmin {
         bluetoothGattServer.addService(service);
         L.e("1、initServices ok");
 
-        L.e("callback = " + mCallback);
-
     }
 
-    // 接收消息的 ID 池，用来去重
-    private HashSet<Integer> msgIdSet;
     // 获取开始和结束的时间
     private long startTimeMillis, endTimeMillis;
 
@@ -465,7 +457,6 @@ public class BLEAdmin {
             currentDevice = device;
             isUserAuth = false;
 
-            L.e("3、onConnectionStateChange---mCallback = " + mCallback);
             // 不能在这里停止广播，否则会造成主设备无法回调 onServicesDiscovered
 //            stopAdvertiser();
 
@@ -488,7 +479,7 @@ public class BLEAdmin {
         @Override
         public void onServiceAdded(int status, BluetoothGattService service) {
             super.onServiceAdded(status, service);
-            L.e(String.format("onServiceAdded：status = %s", status));
+            L.e(String.format("2、onServiceAdded：status = %s", status));
         }
 
         /**
@@ -523,22 +514,23 @@ public class BLEAdmin {
             L.e(String.format("3.onCharacteristicWriteRequest：device name = %s, address = %s", device.getName(), device.getAddress()));
             L.i("3.收到数据 hex:" + byte2HexStr(requestBytes) + " str:" + new String(requestBytes) + " 长度:" + requestBytes.length);
 
+//            for (int i = 0; i < requestBytes.length; i++) {
+//                L.i("3.onCharacteristicWriteRequest---byte[0] = " + requestBytes[i]);
+//
+//            }
             if (requestBytes[0] == (byte) 0xFF) {
+
+                L.e("首包数据");
 
                 // 开始传输数据，此时为首包
                 // 用来判断 msgId 的缓存 byte 数组
-                byte[] tempByte = new byte[4];
+                byte[] msgTypeBytes = new byte[4];
 //            System.arraycopy(requestBytes, 1, tempByte, 0, 4);
-                System.arraycopy(requestBytes, 0, tempByte, 0, 4);
+                System.arraycopy(requestBytes, 1, msgTypeBytes, 0, 4);
 
-                msgId = byteArrayToInt(tempByte);
+                msgType = byteArrayToInt(msgTypeBytes);
                 // 2019/11/28 根据 msgId 的定义规则做相应处理
-                L.i("msgId = " + msgId);
-                if (msgIdSet.contains(msgId)) {
-                    return;
-                }
-                // 加入 ID 池，方便下次判断
-                msgIdSet.add(msgId);
+                L.i("start---msgType = " + msgType);
 
                 // 获取开始时间
                 startTimeMillis = System.currentTimeMillis();
@@ -547,16 +539,9 @@ public class BLEAdmin {
                 // 首包内代表数据包的个数的 byte 数组
                 byte[] totalCountByte = new byte[4];
                 System.arraycopy(requestBytes, 5, totalCountByte, 0, 4);
-//                System.arraycopy(requestBytes, 4, totalCountByte, 0, 4);
-                byte[] startMsgIdByte = new byte[4];
-                System.arraycopy(requestBytes, 9, startMsgIdByte, 0, 4);
-//                System.arraycopy(requestBytes, 8, startMsgIdByte, 0, 4);
                 // 计算总包个数
                 totalCount = byteArrayToInt(totalCountByte);
-                // 计算即将发包的起始 msgId
-                startMsgId = byteArrayToInt(startMsgIdByte);
                 L.i("start---totalCount = " + totalCount);
-                L.i("start---startMsgId = " + startMsgId);
 
                 // 首包接收完成，先跳出去，等待接收下一个包
                 return;
@@ -608,14 +593,15 @@ public class BLEAdmin {
 //                parseContentPackage(requestBytes, msgId);
 //
 //            }
-            if (msgId == BFrameConst.START_MSG_ID_UNIQUE) {
+            if (msgType == BFrameConst.START_MSG_ID_UNIQUE) {
 
                 // 解析 TOKEN 校验数据包
-                parseTokenPackage(requestBytes, msgId);
+                parseTokenPackage(requestBytes, msgType);
 
-            } else if (msgId == BFrameConst.START_MSG_ID_CONTENT) {
+            } else if (msgType == BFrameConst.START_MSG_ID_CONTENT) {
+                L.e("解析普通内容包");
                 // 解析普通内容数据包
-                parseContentPackage(requestBytes, msgId);
+                parseContentPackage(requestBytes, msgType);
             }
 
             // 发送给client的响应
@@ -700,9 +686,9 @@ public class BLEAdmin {
      * 解析 Token 数据包的方法
      *
      * @param requestBytes
-     * @param msgId
+     * @param msg_type
      */
-    private void parseTokenPackage(byte[] requestBytes, int msgId) {
+    private void parseTokenPackage(byte[] requestBytes, int msg_type) {
 
         // 内容字节数组
 //        byte[] contentByte = new byte[14];
@@ -710,21 +696,18 @@ public class BLEAdmin {
         byte[] contentByte = new byte[20];
         System.arraycopy(requestBytes, 0, contentByte, 0, 20);
 
-        MsgBean msgBean = new MsgBean();
-        msgBean.setHexStr(byte2HexStr(requestBytes));
-        msgBean.setMsgShowStr(new String(requestBytes));
-        msgBean.setMsgId(msgId);
+//        MsgBean msgBean = new MsgBean();
+//        msgBean.setHexStr(byte2HexStr(requestBytes));
+//        msgBean.setMsgShowStr(new String(requestBytes));
+//        msgBean.setMsgId(msg_type);
         activity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                msgReceiveListener.onReceiveMsg(msgBean, contentByte);
+                msgReceiveListener.onReceiveMsg(msg_type, contentByte);
             }
         });
 
-        L.i("contentMsgId = " + msgId);
-        L.i("startMsgId = " + startMsgId);
-        L.i("totalCount = " + totalCount);
-        L.i("receiveCount = " + msgIdSet.size());
+        L.i("msgType = " + msg_type);
 //        if (msgId == (startMsgId + totalCount - 1)) {
 //            // 暂时只传四条：1000,1001,1002,1003
 //            msgIdSet.clear();
@@ -750,11 +733,12 @@ public class BLEAdmin {
      * 解析普通内容数据包的方法
      *
      * @param requestBytes
-     * @param msgId
+     * @param msg_type
      */
-    private void parseContentPackage(byte[] requestBytes, int msgId) {
+    private void parseContentPackage(byte[] requestBytes, int msg_type) {
 
         // 如果用户未授权，则不用进行解析了，并且关闭连接
+        L.e("isUserAuth = " + isUserAuth);
         if (!isUserAuth) {
             closeConnection();
             return;
@@ -766,21 +750,18 @@ public class BLEAdmin {
         byte[] contentByte = new byte[20];
         System.arraycopy(requestBytes, 0, contentByte, 0, 20);
 
-        MsgBean msgBean = new MsgBean();
-        msgBean.setHexStr(byte2HexStr(requestBytes));
-        msgBean.setMsgShowStr(new String(requestBytes));
-        msgBean.setMsgId(msgId);
+//        MsgBean msgBean = new MsgBean();
+//        msgBean.setHexStr(byte2HexStr(requestBytes));
+//        msgBean.setMsgShowStr(new String(requestBytes));
+//        msgBean.setMsgId(msg_type);
         activity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                msgReceiveListener.onReceiveMsg(msgBean, contentByte);
+                msgReceiveListener.onReceiveMsg(msg_type, contentByte);
             }
         });
 
-        L.i("contentMsgId = " + msgId);
-        L.i("startMsgId = " + startMsgId);
-        L.i("totalCount = " + totalCount);
-        L.i("receiveCount = " + msgIdSet.size());
+        L.i("contentMsgId = " + msg_type);
 
         // TODO: 2019/12/11 接收数据完成的判断放在接收数据的回调中，判断末尾一位是不是 0x00
 //        if (msgId == (startMsgId + totalCount - 1)) {
@@ -838,7 +819,7 @@ public class BLEAdmin {
         L.e(String.format("4.onResponseToClient：device name = %s, address = %s", device.getName(), device.getAddress()));
         L.e(String.format("4.onResponseToClient：requestId = %s", requestId));
         String msg = new String(reqeustBytes);
-        L.i("4.收到 hex:" + byte2HexStr(reqeustBytes) + " str:" + msg);
+//        L.i("4.收到 hex:" + byte2HexStr(reqeustBytes) + " str:" + msg);
         currentDevice = device;
         sendMessage(characteristic, "收到:" + msg);
     }
@@ -881,10 +862,10 @@ public class BLEAdmin {
         if (currentDevice != null) {
             bluetoothGattServer.notifyCharacteristicChanged(currentDevice, characteristic, false);
         }
-        L.i("4.notify发送 hex:" + byte2HexStr(message.getBytes()) + " str:" + message);
+//        L.i("4.notify发送 hex:" + byte2HexStr(message.getBytes()) + " str:" + message);
     }
 
-    public String byte2HexStr(byte[] value) {
+    private String byte2HexStr(byte[] value) {
         char[] chars = "0123456789ABCDEF".toCharArray();
         StringBuilder sb = new StringBuilder("");
         int bit;

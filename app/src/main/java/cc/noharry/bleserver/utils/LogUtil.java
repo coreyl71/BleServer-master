@@ -108,4 +108,31 @@ public class LogUtil {
 		}*/
     }
 
+    /**
+     * 分段打印出较长log文本
+     *
+     * @param log       原log文本
+     * @param showCount 规定每段显示的长度（最好不要超过限制长度）
+     */
+    public static void showLogCompletion(String tag, String log, int showCount) {
+
+        if (log.length() > showCount) {
+
+            String show = log.substring(0, showCount);
+            Log.i(tag, show + "");
+
+            //剩下的文本还是大于规定长度
+            if ((log.length() - showCount) > showCount) {
+                String partLog = log.substring(showCount, log.length());
+                showLogCompletion(tag, partLog, showCount);
+            } else {
+                String surplusLog = log.substring(showCount, log.length());
+                Log.i(tag, surplusLog + "");
+            }
+
+        } else {
+            Log.i(tag, log + "");
+        }
+    }
+
 }

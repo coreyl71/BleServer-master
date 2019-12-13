@@ -7,18 +7,23 @@ public class BFrameConst {
     public static byte FRAME_END = (byte)0x00;
 
     /**
-     * 发送主设备唯一标识码的数据包起始 msgId
-     */
-    public static final int START_MSG_ID_UNIQUE = 1000;
-    public static final int START_MSG_ID_CONTENT = 2000;
-    /**
-     * 开始发送消息的数据包起始 msgId
+     * 开始发送消息的数据包起始 msgType
      */
     public static final int START_MSG_ID_START = 1;
+
+    /***********************发送主设备唯一标识码的数据包消息类型***********************/
     /**
-     * Server 端提示需要主设备发送 token，用来给 Server 端做校验
+     * 主设备给 Server 发送 Token
      */
-    public static final int START_MSG_ID_NEED_TOKEN = 2;
+    public static final int START_MSG_ID_TOKEN = 2;
+    /**
+     * 主设备给 Server 发送内容包
+     */
+    public static final int START_MSG_ID_CENTRAL = 3;
+    /**
+     * Server 给主设备发送内容包
+     */
+    public static final int START_MSG_ID_SERVER = 5;
 
     /**
      * 之后将这里改为本机唯一标识码

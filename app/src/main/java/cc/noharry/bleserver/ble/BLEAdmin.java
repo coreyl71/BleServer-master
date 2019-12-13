@@ -25,10 +25,10 @@ import android.os.ParcelUuid;
 import android.support.annotation.RequiresApi;
 
 import cc.noharry.bleserver.ContentValue.BFrameConst;
-import cc.noharry.bleserver.bean.MsgBean;
+import cc.noharry.bleserver.utils.ByteUtil;
 import cc.noharry.bleserver.utils.L;
 
-import java.util.HashSet;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 /**
@@ -72,6 +72,7 @@ public class BLEAdmin {
 //    private List<MsgBean> msgList;
 
     private IMsgReceive msgReceiveListener = null;
+    private IMsgSend msgSendListener = null;
 
     private BLEAdmin(Context context) {
         this.activity = (Activity) context;
@@ -79,6 +80,11 @@ public class BLEAdmin {
             msgReceiveListener = (IMsgReceive) context;
         } else {
             throw new IllegalArgumentException("activity must implements IMsgReceive");
+        }
+        if (context instanceof IMsgSend) {
+            msgSendListener = (IMsgSend) context;
+        } else {
+            throw new IllegalArgumentException("activity must implements IMsgSend");
         }
         mContext = context.getApplicationContext();
         mBluetoothManager = (BluetoothManager) mContext.getSystemService(Context.BLUETOOTH_SERVICE);
@@ -101,22 +107,10 @@ public class BLEAdmin {
     }
 
 
-    /**
-     * @param isEnableLog whther enable the debug log
-     * @return BLEAdmin
-     */
-    public BLEAdmin setLogEnable(boolean isEnableLog) {
-        if (isEnableLog) {
-            L.isDebug = true;
-        } else {
-            L.isDebug = false;
-        }
-        return this;
-    }
+
 
     /**
-     * Return true if Bluetooth is currently enabled and ready for use.
-     *
+     * 如果当前蓝牙可用，则返回 true
      * @return true if the local adapter is turned on
      */
     public boolean isEnable() {
@@ -124,8 +118,7 @@ public class BLEAdmin {
     }
 
     /**
-     * Turn on the local Bluetooth adapter
-     *
+     * 开启蓝牙适配器
      * @return true to indicate adapter startup has begun, or false on immediate error
      */
     public boolean openBT() {
@@ -137,11 +130,8 @@ public class BLEAdmin {
 
     private IBTOpenStateChange btOpenStateListener = null;
 
-//    public interface IBTOpenStateChange {
-//        void onBTOpen();
-//    }
-
     /**
+     * 开启蓝牙适配器，并通过接口的方式进行监听
      * Turn on the local Bluetooth adapter with a listener on {@link BluetoothAdapter#STATE_ON}
      *
      * @param listener listen to the state of bluetooth adapter
@@ -175,7 +165,7 @@ public class BLEAdmin {
 
 
     /**
-     * Turn off the local Bluetooth adapter
+     * 关闭蓝牙适配器
      */
     public void closeBT() {
         if (null != mBluetoothAdapter && mBluetoothAdapter.isEnabled()) {
@@ -183,17 +173,28 @@ public class BLEAdmin {
         }
     }
 
+    /**
+     * 获取蓝牙适配器对象
+     * @return
+     */
     public BluetoothAdapter getBluetoothAdapter() {
         return mBluetoothAdapter;
     }
 
-
+    /**
+     * 注册广播，监听蓝牙开启状态
+     * @param context
+     */
     private void registerBtStateReceiver(Context context) {
         IntentFilter filter = new IntentFilter();
         filter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
         context.registerReceiver(btStateReceiver, filter);
     }
 
+    /**
+     * 注销监听蓝牙状态的广播
+     * @param context
+     */
     private void unRegisterBtStateReceiver(Context context) {
         try {
             context.unregisterReceiver(btStateReceiver);
@@ -202,18 +203,6 @@ public class BLEAdmin {
         }
 
     }
-
-
-    public static byte[] int2byte(int res) {
-        byte[] targets = new byte[4];
-
-        targets[3] = (byte) (res & 0xff);// 最低位
-        targets[2] = (byte) ((res >> 8) & 0xff);// 次低位
-        targets[1] = (byte) ((res >> 16) & 0xff);// 次高位
-        targets[0] = (byte) (res >>> 24);// 最高位,无符号右移。
-        return targets;
-    }
-
 
     /**
      * 用户已授权，可以进行数据传输
@@ -238,6 +227,165 @@ public class BLEAdmin {
 
         // 不要在这里重新开始广播，逻辑放到连接状态监听中
 //        startAdvertiser();
+
+    }
+
+    /**
+     * 主动给主设备发送消息
+     * @param data   发送的字符串
+     */
+    public void sendMessageActively(String data, int msgType) {
+
+        // 字符串转换成 Byte 数组
+        int dataLength = data.getBytes(StandardCharsets.UTF_8).length;
+        byte[] dataBytes = data.getBytes(StandardCharsets.UTF_8);
+
+        // 定义新的数据包存放数据（加包头包尾），再加类型，再加包的个数
+        byte[] dataFinalBytes = new byte[dataLength + 2 + 4 + 4];
+        // 包头包尾加两个标识位
+        dataFinalBytes[0] = (byte) 0xFF;
+        dataFinalBytes[dataFinalBytes.length - 1] = (byte) 0x00;
+        // 先放数据包类型
+        byte[] msgStartIdByte = ByteUtil.int2byte(msgType);
+        System.arraycopy(msgStartIdByte, 0, dataFinalBytes, 1, BFrameConst.MESSAGE_ID_LENGTH);
+        // 再放总包长度
+        int msgPackageCount = ((dataLength % 20 == 0) ? (dataLength / 20) : (dataLength / 20 + 1));
+        byte[] msgPackageCountByte = ByteUtil.int2byte(msgPackageCount);
+        System.arraycopy(msgPackageCountByte, 0, dataFinalBytes, 5, BFrameConst.MESSAGE_ID_LENGTH);
+        // 中间放传输内容
+        System.arraycopy(dataBytes, 0, dataFinalBytes, 9, dataLength);
+
+        // 分包操作，这里将msgType直接放在了原数组中，所以不需要单独传
+//        subpackageByte(dataBytes, msgType);
+        subpackageByte(dataFinalBytes);
+
+    }
+
+    // 是否准备就绪写入
+    private boolean isWritingEntity;
+    // 最后一包是否自动补零
+    private final boolean lastPackComplete = false;
+    // 每个包固定长度 20，包括头、尾、msgId
+    private int packLength = 20;
+    /**
+     * 数据分包
+     *
+     * @param data 数据源
+     */
+    private void subpackageByte(byte[] data) {
+
+        // 连接间隔时间修改
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+//            mBluetoothGatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH);
+//        }
+
+//        isWritingEntity = true;
+        // 数据源数组的指针
+        int index = 9;
+        // 数据总长度
+        int dataLength = data.length;
+        // 待传数据有效长度，最后一个包是否需要补零
+        int availableLength = dataLength;
+
+        // 重试次数
+        int retryCount = 0;
+        // 是否消息开始第一个包，内含消息分包的个数
+        boolean isMsgStart = true;
+
+        while (index < dataLength) {
+
+            // 未就绪，可能没收到返回，或未成功写入
+            if (!isWritingEntity) {
+
+                // 小于五次则等待，多于五次（250ms）则重发
+                if (retryCount < 5) {
+
+                    L.e("等待分包");
+                    try {
+                        Thread.sleep(20L);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                    retryCount++;
+                    continue;
+
+                } else {
+
+                    // 重置次数，方便下次阻塞的时候计数
+                    retryCount = 0;
+
+                }
+
+            }
+            L.e("开始分包");
+            // 开始分包，状态置为未就绪状态
+            isWritingEntity = false;
+
+            // 每包数据内容大小为 20
+            int onePackLength = packLength;
+            // 最后一包不足长度不会自动补零
+            if (!lastPackComplete) {
+                onePackLength = (availableLength >= packLength) ? packLength : availableLength;
+            }
+
+            // 实例化一个数据分包，长度为 20
+//            byte[] txBuffer = new byte[onePackLength];
+            byte[] txBuffer = new byte[packLength];
+
+            byte[] msgIdByte;
+            if (isMsgStart) {
+
+                /**
+                 * 首包数组拷贝
+                 * 原数组
+                 * 元数据的起始位置
+                 * 目标数组
+                 * 目标数组的开始起始位置
+                 * 要 copy 的数组的长度
+                 */
+                // 首位 0x00，2-4 msgType，5-8 packageCount
+                System.arraycopy(data, 0, txBuffer, 0, 9);
+
+                // 单个数据包发送
+                boolean result = sendMessage(txBuffer);
+
+//                if (!result) {
+//                    isWritingEntity = false;
+//                }
+
+                // 将是否为首包置为 false，后面的开始发正式数据
+                isMsgStart = false;
+
+            } else {
+
+                for (int i = 0; i < onePackLength; i++) {
+                    if (index < dataLength) {
+                        txBuffer[i] = data[index++];
+                    }
+                }
+
+                // 更新剩余数据长度
+                availableLength -= onePackLength;
+
+                // 单个数据包发送
+                boolean result = sendMessage(txBuffer);
+
+            }
+
+            try {
+                Thread.sleep(20L);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+
+        }
+
+        // 连接间隔时间修改
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+//            mBluetoothGatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_BALANCED);
+//        }
+        L.e("写入完成");
 
     }
 
@@ -514,10 +662,6 @@ public class BLEAdmin {
             L.e(String.format("3.onCharacteristicWriteRequest：device name = %s, address = %s", device.getName(), device.getAddress()));
             L.i("3.收到数据 hex:" + byte2HexStr(requestBytes) + " str:" + new String(requestBytes) + " 长度:" + requestBytes.length);
 
-//            for (int i = 0; i < requestBytes.length; i++) {
-//                L.i("3.onCharacteristicWriteRequest---byte[0] = " + requestBytes[i]);
-//
-//            }
             if (requestBytes[0] == (byte) 0xFF) {
 
                 L.e("首包数据");
@@ -525,17 +669,15 @@ public class BLEAdmin {
                 // 开始传输数据，此时为首包
                 // 用来判断 msgId 的缓存 byte 数组
                 byte[] msgTypeBytes = new byte[4];
-//            System.arraycopy(requestBytes, 1, tempByte, 0, 4);
                 System.arraycopy(requestBytes, 1, msgTypeBytes, 0, 4);
 
+                // 获取数据包类型
                 msgType = byteArrayToInt(msgTypeBytes);
-                // 2019/11/28 根据 msgId 的定义规则做相应处理
                 L.i("start---msgType = " + msgType);
 
-                // 获取开始时间
+                // 记录开始时间
                 startTimeMillis = System.currentTimeMillis();
 
-                // 暂定为1代表发送首包，内含即将要发的数据包的个数
                 // 首包内代表数据包的个数的 byte 数组
                 byte[] totalCountByte = new byte[4];
                 System.arraycopy(requestBytes, 5, totalCountByte, 0, 4);
@@ -548,57 +690,13 @@ public class BLEAdmin {
 
             }
 
-            // 用来判断 msgId 的缓存 byte 数组
-//            byte[] tempByte = new byte[4];
-////            System.arraycopy(requestBytes, 1, tempByte, 0, 4);
-//            System.arraycopy(requestBytes, 0, tempByte, 0, 4);
-//
-//            int msgId = byteArrayToInt(tempByte);
-//            // 2019/11/28 根据 msgId 的定义规则做相应处理
-//            L.i("msgId = " + msgId);
-//            if (msgIdSet.contains(msgId)) {
-//                return;
-//            }
-//            // 加入 ID 池，方便下次判断
-//            msgIdSet.add(msgId);
-
-            // 判断是否为首包
-//            if (msgId == 1) {
-//
-//                // 获取开始时间
-//                startTimeMillis = System.currentTimeMillis();
-//
-//                // 暂定为1代表发送首包，内含即将要发的数据包的个数
-//                // 首包内代表数据包的个数的 byte 数组
-//                byte[] totalCountByte = new byte[4];
-////                System.arraycopy(requestBytes, 5, totalCountByte, 0, 4);
-//                System.arraycopy(requestBytes, 4, totalCountByte, 0, 4);
-//                byte[] startMsgIdByte = new byte[4];
-////                System.arraycopy(requestBytes, 9, startMsgIdByte, 0, 4);
-//                System.arraycopy(requestBytes, 8, startMsgIdByte, 0, 4);
-//                // 计算总包个数
-//                totalCount = byteArrayToInt(totalCountByte);
-//                // 计算即将发包的起始 msgId
-//                startMsgId = byteArrayToInt(startMsgIdByte);
-//                L.i("start---totalCount = " + totalCount);
-//                L.i("start---startMsgId = " + startMsgId);
-//
-//            } else if (msgId < 2000) {
-//
-//                // 解析 TOKEN 校验数据包
-//                parseTokenPackage(requestBytes, msgId);
-//
-//            } else {
-//                // 解析普通内容数据包
-//                parseContentPackage(requestBytes, msgId);
-//
-//            }
-            if (msgType == BFrameConst.START_MSG_ID_UNIQUE) {
+            // 根据数据类型，判断接收到的是哪种数据，分别做解析
+            if (msgType == BFrameConst.START_MSG_ID_TOKEN) {
 
                 // 解析 TOKEN 校验数据包
                 parseTokenPackage(requestBytes, msgType);
 
-            } else if (msgType == BFrameConst.START_MSG_ID_CONTENT) {
+            } else if (msgType == BFrameConst.START_MSG_ID_CENTRAL) {
                 L.e("解析普通内容包");
                 // 解析普通内容数据包
                 parseContentPackage(requestBytes, msgType);
@@ -606,9 +704,17 @@ public class BLEAdmin {
 
             // 发送给client的响应
             bluetoothGattServer.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, characteristic.getValue());
-            // 4.处理响应内容，通知客户端改变 Characteristic
+            // 4.处理响应内容，通知客户端改变 Characteristic，这里写特定的返回值，用于主设备判断是回调还是主动写入
+            byte[] responseBytes = new byte[2];
+            responseBytes[0] = BFrameConst.FRAME_HEAD;
+            responseBytes[1] = BFrameConst.FRAME_HEAD;
+            characteristic.setValue(responseBytes);
+            if (null != currentDevice) {
+                bluetoothGattServer.notifyCharacteristicChanged(currentDevice, characteristic, false);
+            }
             // TODO: 2019/12/2 试着在这里改变返回值，将这里的 requestBytes 改为写自己的 byte[]
-            onResponseToClient(requestBytes, device, requestId, characteristic);
+//            onResponseToClient(requestBytes, device, requestId, characteristic);
+
         }
 
         /**
@@ -882,4 +988,18 @@ public class BLEAdmin {
         }
         return "(0x) " + sb.toString().trim();
     }
+
+    /**
+     * @param isEnableLog whther enable the debug log
+     * @return BLEAdmin
+     */
+    public BLEAdmin setLogEnable(boolean isEnableLog) {
+        if (isEnableLog) {
+            L.isDebug = true;
+        } else {
+            L.isDebug = false;
+        }
+        return this;
+    }
+
 }

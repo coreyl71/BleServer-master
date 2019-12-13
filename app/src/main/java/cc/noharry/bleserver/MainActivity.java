@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Message;
 import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
 import android.util.Log;
@@ -22,6 +23,8 @@ import cc.noharry.bleserver.bean.MsgBean;
 import cc.noharry.bleserver.ble.BLEAdmin;
 import cc.noharry.bleserver.ble.IBTOpenStateChange;
 import cc.noharry.bleserver.ble.IMsgReceive;
+import cc.noharry.bleserver.ble.IMsgSend;
+import cc.noharry.bleserver.utils.AssetsUtil;
 import cc.noharry.bleserver.utils.L;
 import cc.noharry.bleserver.utils.LogUtil;
 import cc.noharry.bleserver.utils.MySP;
@@ -29,6 +32,7 @@ import cc.noharry.bleserver.utils.MySP;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.lang.ref.WeakReference;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -37,7 +41,8 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class MainActivity extends AppCompatActivity implements OnClickListener, IMsgReceive {
+public class MainActivity extends AppCompatActivity implements OnClickListener,
+        IMsgReceive, IMsgSend {
 
     private IBTOpenStateChange btOpenStateListener = null;
 
@@ -54,7 +59,7 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
      */
     private List<byte[]> contentBytes;
 
-    private Handler mHandler;
+    private MyHandler mHandler;
 
     // 请求连接主机的名称和 MAC 地址
     private LinearLayout ll_ble_connect_info;
@@ -93,7 +98,7 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
             }
         };
 
-        mHandler = new Handler();
+        mHandler = new MyHandler(this);
 
         // 找控件
         initView();
@@ -165,12 +170,12 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
              */
             switch (msg_type) {
 
-                case BFrameConst.START_MSG_ID_UNIQUE:
+                case BFrameConst.START_MSG_ID_TOKEN:
                     // 接收 Token 数据包完毕
                     receiveTokenCompleted();
                     break;
 
-                case BFrameConst.START_MSG_ID_CONTENT:
+                case BFrameConst.START_MSG_ID_CENTRAL:
                     // 接收普通内容数据包完毕
                     receiveMsgComplete();
                     break;
@@ -181,6 +186,16 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
             }
 
         }
+
+    }
+
+    /**
+     * 触发发送消息
+     */
+    @Override
+    public void onSendMsg() {
+
+        L.e("onSendMsg");
 
     }
 
@@ -233,6 +248,13 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
                         ll_ble_connect_info.setVisibility(View.GONE);
                         // 将判断值设置为同意连接，这样可以接收到后面传输的内容数据包
                         BLEAdmin.getInstance(this).agreeConnection();
+                        // TODO: 2019/12/13 具体发送消息的触发条件可以在其他地方，但是都先需要将 BLEAdmin 中的 isUserAuth 置为true
+                        String contentStr = AssetsUtil.getJson("BLE一组健康数据示例.txt", getApplicationContext());
+                        // 给 Handler 传参数，准备预分包，即字符串转 byte[]
+                        Message msgSendContent = mHandler.obtainMessage();
+                        msgSendContent.what = BFrameConst.START_MSG_ID_SERVER;
+                        msgSendContent.obj = contentStr;
+                        mHandler.sendMessage(msgSendContent);
 
                     }
 
@@ -245,6 +267,7 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
             }
 
         }
+
     }
 
     /**
@@ -346,7 +369,7 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
                 // 字符串转换成 Byte 数组
                 byte[] dataBytes = resultStr.getBytes(StandardCharsets.UTF_8);
                 // 数据分包
-                subpackageByte(dataBytes, BFrameConst.START_MSG_ID_CONTENT);
+                subpackageByte(dataBytes, BFrameConst.START_MSG_ID_CENTRAL);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -636,6 +659,40 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
         }
     }
 
+    /**
+     * 自定义一个静态类，防止内存泄漏
+     */
+    private static class MyHandler extends Handler {
+
+        WeakReference<MainActivity> mainActivity;
+
+        public MyHandler(MainActivity mainActivity) {
+            this.mainActivity = new WeakReference<>(mainActivity);
+        }
+
+        @Override
+        public void handleMessage(Message msg) {
+
+            final MainActivity act = mainActivity.get();
+
+            switch (msg.what) {
+
+                case BFrameConst.START_MSG_ID_SERVER:
+
+                    /**
+                     * 发送实际内容
+                     * 第一个参数为发送内容，第二个参数为数据包类型：TOKEN/发送内容
+                     */
+                    BLEAdmin.getInstance(act).sendMessageActively((String) msg.obj, BFrameConst.START_MSG_ID_SERVER);
+//                    act.preSubpackageByte((String) msg.obj, BFrameConst.START_MSG_ID_SERVER);
+                    break;
+
+            }
+
+        }
+
+    }
+
     int mKey1Action = KeyEvent.ACTION_UP;
     long mActionTime = 0;
     int mKey2Action = KeyEvent.ACTION_UP;
@@ -785,6 +842,5 @@ public class MainActivity extends AppCompatActivity implements OnClickListener, 
         tv_ble_device_name = findViewById(R.id.tv_ble_device_name);
         tv_ble_device_address = findViewById(R.id.tv_ble_device_address);
     }
-
 
 }

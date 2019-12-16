@@ -686,34 +686,50 @@ public class BLEAdmin {
                 L.i("start---totalCount = " + totalCount);
 
                 // 首包接收完成，先跳出去，等待接收下一个包
-                return;
+                // 发送给client的响应
+                bluetoothGattServer.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, characteristic.getValue());
 
-            }
+                // 发送给client的响应
+                bluetoothGattServer.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, characteristic.getValue());
+                // 4.处理响应内容，通知客户端改变 Characteristic，这里写特定的返回值，用于主设备判断是回调还是主动写入
+                byte[] responseBytes = new byte[2];
+                responseBytes[0] = BFrameConst.FRAME_HEAD;
+                responseBytes[1] = BFrameConst.FRAME_HEAD;
+                characteristic.setValue(responseBytes);
+                if (null != currentDevice) {
+                    bluetoothGattServer.notifyCharacteristicChanged(currentDevice, characteristic, false);
+                }
 
-            // 根据数据类型，判断接收到的是哪种数据，分别做解析
-            if (msgType == BFrameConst.START_MSG_ID_TOKEN) {
+            } else {
 
-                // 解析 TOKEN 校验数据包
-                parseTokenPackage(requestBytes, msgType);
+                // 根据数据类型，判断接收到的是哪种数据，分别做解析
+                if (msgType == BFrameConst.START_MSG_ID_TOKEN) {
 
-            } else if (msgType == BFrameConst.START_MSG_ID_CENTRAL) {
-                L.e("解析普通内容包");
-                // 解析普通内容数据包
-                parseContentPackage(requestBytes, msgType);
-            }
+                    // 解析 TOKEN 校验数据包
+                    parseTokenPackage(requestBytes, msgType);
 
-            // 发送给client的响应
-            bluetoothGattServer.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, characteristic.getValue());
-            // 4.处理响应内容，通知客户端改变 Characteristic，这里写特定的返回值，用于主设备判断是回调还是主动写入
-            byte[] responseBytes = new byte[2];
-            responseBytes[0] = BFrameConst.FRAME_HEAD;
-            responseBytes[1] = BFrameConst.FRAME_HEAD;
-            characteristic.setValue(responseBytes);
-            if (null != currentDevice) {
-                bluetoothGattServer.notifyCharacteristicChanged(currentDevice, characteristic, false);
-            }
-            // TODO: 2019/12/2 试着在这里改变返回值，将这里的 requestBytes 改为写自己的 byte[]
+                } else if (msgType == BFrameConst.START_MSG_ID_CENTRAL) {
+                    L.e("解析普通内容包");
+                    // 解析普通内容数据包
+                    parseContentPackage(requestBytes, msgType);
+                }
+
+                // 发送给client的响应
+                bluetoothGattServer.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, characteristic.getValue());
+                // 4.处理响应内容，通知客户端改变 Characteristic，这里写特定的返回值，用于主设备判断是回调还是主动写入
+                byte[] responseBytes = new byte[2];
+                responseBytes[0] = BFrameConst.FRAME_HEAD;
+                responseBytes[1] = BFrameConst.FRAME_HEAD;
+                characteristic.setValue(responseBytes);
+                if (null != currentDevice) {
+                    bluetoothGattServer.notifyCharacteristicChanged(currentDevice, characteristic, false);
+                }
+                // TODO: 2019/12/2 试着在这里改变返回值，将这里的 requestBytes 改为写自己的 byte[]
 //            onResponseToClient(requestBytes, device, requestId, characteristic);
+
+            }
+
+
 
         }
 

@@ -244,6 +244,7 @@ public class MainActivity extends AppCompatActivity implements OnClickListener,
 
                     } else {
 
+                        L.e("token 匹配，直接连接");
                         // 不需要用户授权，直接连接
                         ll_ble_connect_info.setVisibility(View.GONE);
                         // 将判断值设置为同意连接，这样可以接收到后面传输的内容数据包
@@ -683,8 +684,9 @@ public class MainActivity extends AppCompatActivity implements OnClickListener,
                      * 发送实际内容
                      * 第一个参数为发送内容，第二个参数为数据包类型：TOKEN/发送内容
                      */
+                    L.e("Handler 准备发送数据");
+                    L.e("Handler 准备发送数据" + msg.obj);
                     BLEAdmin.getInstance(act).sendMessageActively((String) msg.obj, BFrameConst.START_MSG_ID_SERVER);
-//                    act.preSubpackageByte((String) msg.obj, BFrameConst.START_MSG_ID_SERVER);
                     break;
 
             }

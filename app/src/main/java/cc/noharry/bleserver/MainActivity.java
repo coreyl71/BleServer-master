@@ -250,7 +250,7 @@ public class MainActivity extends AppCompatActivity implements OnClickListener,
                         // 将判断值设置为同意连接，这样可以接收到后面传输的内容数据包
                         BLEAdmin.getInstance(this).agreeConnection();
                         // TODO: 2019/12/13 具体发送消息的触发条件可以在其他地方，但是都先需要将 BLEAdmin 中的 isUserAuth 置为true
-                        String contentStr = AssetsUtil.getJson("BLE一组健康数据示例.txt", getApplicationContext());
+                        String contentStr = AssetsUtil.getJson("BLE100组健康数据示例.txt", getApplicationContext());
                         // 给 Handler 传参数，准备预分包，即字符串转 byte[]
                         Message msgSendContent = mHandler.obtainMessage();
                         msgSendContent.what = BFrameConst.START_MSG_ID_SERVER;

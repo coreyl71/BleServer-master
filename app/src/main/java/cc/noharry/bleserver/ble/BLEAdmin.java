@@ -261,6 +261,8 @@ public class BLEAdmin {
 
     }
 
+    // 是否客户端断开等原因停止传输
+    private boolean isStop = false;
     // 是否准备就绪写入
     private boolean isWritingEntity;
     // 最后一包是否自动补零
@@ -293,6 +295,21 @@ public class BLEAdmin {
         boolean isMsgStart = true;
 
         while (index < dataLength) {
+
+            // 是否由于客户端断开等原因停止传输
+            if (isStop) {
+
+                L.e("停止传输");
+                if (availableLength > 0) {
+
+                    // TODO: 2019/12/17 之后需要保存数据，做断点续传
+
+
+                }
+
+                break;
+
+            }
 
             // 未就绪，可能没收到返回，或未成功写入
             if (!isWritingEntity) {
@@ -611,7 +628,11 @@ public class BLEAdmin {
             // 判断连接状态，0 为未连接，2 为已连接
             if (newState == 2) {
                 L.i("已连接");
+                // 客户端连接，初始化控制变量，可以传输数据
+                isStop = false;
             } else if (newState == 0) {
+                // 客户端断开连接，需要停止传输数据
+                isStop = true;
                 // 断开连接，重新开始广播
                 stopAdvertiser();
                 startAdvertiser();

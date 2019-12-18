@@ -281,7 +281,7 @@ public class BLEAdmin {
 //            mBluetoothGatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH);
 //        }
 
-//        isWritingEntity = true;
+        isWritingEntity = true;
         // 数据源数组的指针
         int index = 9;
         // 数据总长度
@@ -390,7 +390,7 @@ public class BLEAdmin {
             }
 
             try {
-                Thread.sleep(20L);
+                Thread.sleep(23L);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -486,7 +486,7 @@ public class BLEAdmin {
                 .build();
 
         // 31个字节
-        String name = "Corey_MI5S_S1";
+        String name = "Corey_MI5S_S2";
 //    String name = "LIF_BLE";
 
         byte[] bytes = name.getBytes();
@@ -799,6 +799,7 @@ public class BLEAdmin {
             super.onNotificationSent(device, status);
             L.e(String.format("5.onNotificationSent：device name = %s, address = %s", device.getName(), device.getAddress()));
             L.e(String.format("5.onNotificationSent：status = %s", status));
+            isWritingEntity = true;
         }
 
         /**

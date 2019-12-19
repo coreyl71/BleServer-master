@@ -139,6 +139,8 @@ public class MainActivity extends AppCompatActivity implements OnClickListener,
     @Override
     public void onReceiveMsg(int msg_type, byte[] contentByte) {
 
+        L.e("onReceiveMsg---contentByte.length = " + contentByte.length);
+
         // 此时正在接收数据，拦截点击事件
         isReceiveTokenComplete = false;
 
@@ -210,11 +212,14 @@ public class MainActivity extends AppCompatActivity implements OnClickListener,
         if (null != contentBytes && contentBytes.size() != 0) {
 
             // 计算总字节长度
-            int contentByteLength = contentBytes.size() * 20;
+            int contentByteLength = (contentBytes.size() - 1) * BFrameConst.MTU3
+                    + contentBytes.get(contentBytes.size() - 1).length;
+
             // 待拼接数组，最终用来转换字符串显示
             byte[] contentBytesConcat = new byte[contentByteLength];
             for (int i = 0; i < contentBytes.size(); i++) {
-                System.arraycopy(contentBytes.get(i), 0, contentBytesConcat, i * 20, 20);
+                L.e("contentBytes.get(i).length = " + contentBytes.get(i).length);
+                System.arraycopy(contentBytes.get(i), 0, contentBytesConcat, i * BFrameConst.MTU3, contentBytes.get(i).length);
             }
             // 转成字符串
             remoteTokenReceived = new String(contentBytesConcat);
@@ -289,12 +294,13 @@ public class MainActivity extends AppCompatActivity implements OnClickListener,
         if (null != contentBytes && contentBytes.size() != 0) {
 
             // 计算总字节长度
-            int contentByteLength = contentBytes.size() * 20;
+            int contentByteLength = (contentBytes.size() - 1) * BFrameConst.MTU3
+                    + contentBytes.get(contentBytes.size() - 1).length;
 
             // 待拼接数组，最终用来转换字符串显示
             byte[] contentBytesConcat = new byte[contentByteLength];
             for (int i = 0; i < contentBytes.size(); i++) {
-                System.arraycopy(contentBytes.get(i), 0, contentBytesConcat, i * 20, 20);
+                System.arraycopy(contentBytes.get(i), 0, contentBytesConcat, i * BFrameConst.MTU3, contentBytes.get(i).length);
             }
 
             // 转成字符串
@@ -606,7 +612,8 @@ public class MainActivity extends AppCompatActivity implements OnClickListener,
         // 获取具体的按键类型
         KEY_ACTION_TYPE = getKeyActionType(keyCode, event);
         Log.e(ContantValue.TAG, "KEY_ACTION_TYPE == " + KEY_ACTION_TYPE);
-        if (KEY_ACTION_TYPE == 3) {
+//        if (KEY_ACTION_TYPE == 3) {
+        if (keyCode == 231) {
 
             // 短按按键 1，弹框消失，确认连接，保存该设备到本地，下次可以自动连接不弹框
             L.i("同意连接");
@@ -626,7 +633,8 @@ public class MainActivity extends AppCompatActivity implements OnClickListener,
             msgSendContent.obj = contentStr;
             mHandler.sendMessage(msgSendContent);
 
-        } else if (KEY_ACTION_TYPE == 1) {
+//        } else if (KEY_ACTION_TYPE == 1) {
+        } else if (keyCode == 27) {
 
             L.i("拒绝连接");
             // 短按按键 2，弹框消失，拒绝连接

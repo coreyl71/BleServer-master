@@ -249,7 +249,7 @@ public class BLEAdmin {
         byte[] msgStartIdByte = ByteUtil.int2byte(msgType);
         System.arraycopy(msgStartIdByte, 0, dataFinalBytes, 1, BFrameConst.MESSAGE_ID_LENGTH);
         // 再放总包长度
-        int msgPackageCount = ((dataLength % 20 == 0) ? (dataLength / 20) : (dataLength / 20 + 1));
+        int msgPackageCount = ((dataLength % BFrameConst.MTU3 == 0) ? (dataLength / BFrameConst.MTU3) : (dataLength / BFrameConst.MTU3 + 1));
         byte[] msgPackageCountByte = ByteUtil.int2byte(msgPackageCount);
         System.arraycopy(msgPackageCountByte, 0, dataFinalBytes, 5, BFrameConst.MESSAGE_ID_LENGTH);
         // 中间放传输内容
@@ -268,7 +268,7 @@ public class BLEAdmin {
     // 最后一包是否自动补零
     private final boolean lastPackComplete = false;
     // 每个包固定长度 20，包括头、尾、msgId
-    private int packLength = 20;
+    private int packLength = BFrameConst.MTU3;
     /**
      * 数据分包
      *
@@ -339,15 +339,9 @@ public class BLEAdmin {
             isWritingEntity = false;
 
             // 每包数据内容大小为 20
-            int onePackLength = packLength;
-            // 最后一包不足长度不会自动补零
-            if (!lastPackComplete) {
-                onePackLength = (availableLength >= packLength) ? packLength : availableLength;
-            }
+            int onePackLength;
 
-            // 实例化一个数据分包，长度为 20
-//            byte[] txBuffer = new byte[onePackLength];
-            byte[] txBuffer = new byte[packLength];
+//            byte[] txBuffer = new byte[packLength];
 
             byte[] msgIdByte;
             if (isMsgStart) {
@@ -361,7 +355,16 @@ public class BLEAdmin {
                  * 要 copy 的数组的长度
                  */
                 // 首位 0x00，2-4 msgType，5-8 packageCount
-                System.arraycopy(data, 0, txBuffer, 0, 9);
+                // 最后一包不足长度不会自动补零
+                onePackLength = 9;
+
+                // 实例化一个数据分包，长度为计算的包长度
+                byte[] txBuffer = new byte[onePackLength];
+                L.e("首包---onePackLength = " + onePackLength);
+                System.arraycopy(data, 0, txBuffer, 0, onePackLength);
+
+                // 更新剩余数据长度
+                availableLength -= onePackLength;
 
                 // 单个数据包发送
                 boolean result = sendMessage(txBuffer);
@@ -374,6 +377,15 @@ public class BLEAdmin {
                 isMsgStart = false;
 
             } else {
+
+                // 最后一包不足长度不会自动补零
+                if (!lastPackComplete) {
+                    onePackLength = (availableLength >= packLength) ? packLength : availableLength;
+                }
+                // 实例化一个数据分包，长度为计算的包长度
+                byte[] txBuffer = new byte[onePackLength];
+
+                L.e("非首包---onePackLength = " + onePackLength);
 
                 for (int i = 0; i < onePackLength; i++) {
                     if (index < dataLength) {
@@ -837,8 +849,8 @@ public class BLEAdmin {
         // 内容字节数组
 //        byte[] contentByte = new byte[14];
 //        System.arraycopy(requestBytes, 5, contentByte, 0, 14);
-        byte[] contentByte = new byte[20];
-        System.arraycopy(requestBytes, 0, contentByte, 0, 20);
+//        byte[] contentByte = new byte[BFrameConst.MTU3];
+//        System.arraycopy(requestBytes, 0, contentByte, 0, BFrameConst.MTU3);
 
 //        MsgBean msgBean = new MsgBean();
 //        msgBean.setHexStr(byte2HexStr(requestBytes));
@@ -847,7 +859,8 @@ public class BLEAdmin {
         activity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                msgReceiveListener.onReceiveMsg(msg_type, contentByte);
+//                msgReceiveListener.onReceiveMsg(msg_type, contentByte);
+                msgReceiveListener.onReceiveMsg(msg_type, requestBytes);
             }
         });
 
@@ -891,8 +904,8 @@ public class BLEAdmin {
         // 内容字节数组
 //        byte[] contentByte = new byte[14];
 //        System.arraycopy(requestBytes, 5, contentByte, 0, 14);
-        byte[] contentByte = new byte[20];
-        System.arraycopy(requestBytes, 0, contentByte, 0, 20);
+//        byte[] contentByte = new byte[BFrameConst.MTU3];
+//        System.arraycopy(requestBytes, 0, contentByte, 0, BFrameConst.MTU3);
 
 //        MsgBean msgBean = new MsgBean();
 //        msgBean.setHexStr(byte2HexStr(requestBytes));
@@ -901,7 +914,8 @@ public class BLEAdmin {
         activity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                msgReceiveListener.onReceiveMsg(msg_type, contentByte);
+//                msgReceiveListener.onReceiveMsg(msg_type, contentByte);
+                msgReceiveListener.onReceiveMsg(msg_type, requestBytes);
             }
         });
 

@@ -6,6 +6,12 @@ public class BFrameConst {
     public static int  MESSAGE_ID_LENGTH = 4;
     public static byte FRAME_END = (byte)0x00;
 
+    public static int MTU = 512;
+    public static int MTU3 = 509;
+
+//    public static int MTU = 23;
+//    public static int MTU3 = 20;
+
     /**
      * 开始发送消息的数据包起始 msgType
      */

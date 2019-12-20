@@ -48,7 +48,15 @@ public class BLEAdmin {
     private UUID UUID_CHARREAD = UUID.fromString("0000ffe2-0000-1000-8000-00805f9b34fb");
     private UUID UUID_DESCRIPTOR = UUID.fromString("00002902-0000-1000-8000-00805F9B34FB");
     private UUID UUID_CHARWRITE = UUID.fromString("0000ffe1-0000-1000-8000-00805f9b34fb");
+
+    private BluetoothGattServer bluetoothGattServer;
+    private BluetoothGattCharacteristic characteristicRead;
     private BluetoothGattCharacteristic mCharacteristicWrite;
+    private BluetoothDevice currentDevice;
+
+    /**
+     * 广播相关配置
+     */
     private AdvertiseSettings mSettings;
     private AdvertiseData mAdvertiseData;
     private AdvertiseData mScanResponseData;
@@ -219,14 +227,11 @@ public class BLEAdmin {
 
         isUserAuth = false;
 
-        // TODO: 2019/12/9  断开已建立的连接，或尝试取消当前正在进行的连接尝试。
+        // 2019/12/9  断开已建立的连接，或尝试取消当前正在进行的连接尝试。
         L.i("connected = " + mBluetoothManager.getConnectionState(currentDevice, BluetoothProfile.GATT));
         if (null != currentDevice) {
             bluetoothGattServer.cancelConnection(currentDevice);
         }
-
-        // 不要在这里重新开始广播，逻辑放到连接状态监听中
-//        startAdvertiser();
 
     }
 
@@ -451,7 +456,7 @@ public class BLEAdmin {
 
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public void initGATTServer() {
+    public void initAdvertiser() {
 
         /**
          * 广播的配置实例
@@ -518,7 +523,7 @@ public class BLEAdmin {
             @Override
             public void onStartSuccess(AdvertiseSettings settingsInEffect) {
                 L.i("BLE advertisement added successfully");
-                initServices(mContext);
+                initGattServices(mContext);
             }
 
             @Override
@@ -561,16 +566,14 @@ public class BLEAdmin {
         mBluetoothLeAdvertiser.startAdvertising(mSettings, mAdvertiseData, mScanResponseData, mCallback);
     }
 
-    private BluetoothGattServer bluetoothGattServer;
-    private BluetoothGattCharacteristic characteristicRead;
-    private BluetoothDevice currentDevice;
+
 
     /**
      * 初始化 BluetoothGattServer 对象
      *
      * @param context 当前上下文
      */
-    private void initServices(Context context) {
+    private void initGattServices(Context context) {
 
         /**
          * 获得 BluetoothGattServer 实例
@@ -608,7 +611,7 @@ public class BLEAdmin {
         service.addCharacteristic(mCharacteristicWrite);
 
         bluetoothGattServer.addService(service);
-        L.e("1、initServices ok");
+        L.e("1、initGattServices ok");
 
     }
 

@@ -1,6 +1,5 @@
 package cc.noharry.bleserver;
 
-import android.bluetooth.BluetoothDevice;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Bundle;
@@ -19,7 +18,6 @@ import android.widget.TextView;
 
 import cc.noharry.bleserver.ContentValue.BFrameConst;
 import cc.noharry.bleserver.ContentValue.ContantValue;
-import cc.noharry.bleserver.bean.MsgBean;
 import cc.noharry.bleserver.ble.BLEAdmin;
 import cc.noharry.bleserver.ble.IBTOpenStateChange;
 import cc.noharry.bleserver.ble.IMsgReceive;
@@ -33,7 +31,6 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.ref.WeakReference;
-import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -94,7 +91,7 @@ public class MainActivity extends AppCompatActivity implements OnClickListener,
             public void onBTOpen() {
                 L.i("开启蓝牙");
                 // 蓝牙开启成功后，回调中初始化 GATT
-                initGatt();
+                initGattAdvertiser();
             }
         };
 
@@ -587,8 +584,8 @@ public class MainActivity extends AppCompatActivity implements OnClickListener,
     /**
      * 初始化 GATT
      */
-    private void initGatt() {
-        BLEAdmin.getInstance(this).initGATTServer();
+    private void initGattAdvertiser() {
+        BLEAdmin.getInstance(this).initAdvertiser();
     }
 
     private boolean isLoading = false;
